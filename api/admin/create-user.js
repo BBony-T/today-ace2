@@ -1,5 +1,4 @@
 // /api/admin/create-user.js
-export const config = { runtime: 'nodejs18.x' };
 
 import bcrypt from 'bcryptjs';
 import initAdmin from '../_shared/initAdmin.js';
