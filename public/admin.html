@@ -1157,29 +1157,42 @@
             return lines.map(line => line.split(',').map(cell => cell.trim()));
         }
 
-        // 명부 데이터 처리
-        function processRosterData(data) {
-            // 헤더 제거
-            if (data.length > 0) {
-                data.shift();
-            }
+        // 명부 데이터 처리(서버 업로드)
+        async function processRosterData(data) {
+          // 헤더 제거
+          if (data.length > 0) data.shift();
 
-            const roster = data.filter(row => row.length >= 2 && row[0] && row[1]).map(row => ({
-                name: row[0].trim(),
-                studentId: row[1].trim(),
-                class: row[2] ? row[2].trim() : '',
-                year: document.getElementById('yearSelect').value,
-                subject: document.getElementById('subjectSelect').value,
-                club: document.getElementById('clubSelect').value
+          // CSV/엑셀 → 표준화
+          const roster = data
+            .filter(row => row.length >= 2 && row[0] && row[1])
+            .map(row => ({
+              name: row[0].trim(),
+              studentId: row[1].trim(),
+              class: row[2] ? row[2].trim() : '',
+              year: document.getElementById('yearSelect').value,
+              subject: document.getElementById('subjectSelect').value,
+              club: document.getElementById('clubSelect').value,
+              // 로그인용: 없으면 기본값으로 생성(교사가 나중에 수정 가능)
+              username: row[1].trim(),              // 기본: 학번 = 아이디
+              password: row[1].trim()               // 기본: 학번 = 비밀번호
             }));
-
-            // localStorage에 저장
-            const existingRoster = JSON.parse(localStorage.getItem('classRoster') || '[]');
-            const updatedRoster = [...existingRoster, ...roster];
-            localStorage.setItem('classRoster', JSON.stringify(updatedRoster));
+          
+          try {
+            const res = await fetch('/api/admin/import-students', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ roster })
+            });
+            const j = await res.json();
+            if (!res.ok || !j.success) throw new Error(j.error || '업로드 실패');
             
-            console.log('업로드된 명부:', roster);
+            console.log('업로드된 명부:', j.imported);
+          } catch (e) {
+            console.error('서버 업로드 오류:', e);
+            showMessage('서버 업로드 중 오류가 발생했습니다.', 'error');
+          }
         }
+
 
         // 테스트 데이터 생성
         function generateTestData() {
@@ -1304,4 +1317,5 @@
         });
     </script>
 </body>
+
 </html>
