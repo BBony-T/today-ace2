@@ -232,59 +232,114 @@
     </div>
 
     <script>
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const statusMessage = document.getElementById('statusMessage');
-            
-            // 간단한 로그인 검증 (실제 프로젝트에서는 서버에서 처리)
-            if (username === 'admin' && password === 'admin123') {
-                showMessage('관리자로 로그인되었습니다! 관리자 페이지로 이동합니다...', 'success');
-                setTimeout(() => {
-                    // 실제로는 관리자 페이지로 이동
-                    alert('관리자 페이지로 이동 (아직 구현 전)');
-                }, 1500);
-            } else if (username === 'student1' && password === 'pass123') {
-                showMessage('학생으로 로그인되었습니다! 학생 페이지로 이동합니다...', 'success');
-                setTimeout(() => {
-                    // 실제로는 학생 페이지로 이동
-                    alert('학생 페이지로 이동 (아직 구현 전)');
-                }, 1500);
-            } else if (username === '' || password === '') {
-                showMessage('아이디와 비밀번호를 모두 입력해주세요.', 'error');
-            } else {
-                showMessage('아이디 또는 비밀번호가 올바르지 않습니다.', 'error');
-            }
-        });
+      // 공통 메시지 유틸
+      function showMessage(message, type) {
+        const box = document.getElementById('statusMessage');
+        box.textContent = message;
+        box.className = `status-message ${type}`;
+        box.style.display = 'block';
+        if (type === 'error') setTimeout(() => (box.style.display = 'none'), 3000);
+      }
 
-        function showMessage(message, type) {
-            const statusMessage = document.getElementById('statusMessage');
-            statusMessage.textContent = message;
-            statusMessage.className = `status-message ${type}`;
-            statusMessage.style.display = 'block';
-            
-            if (type === 'error') {
-                setTimeout(() => {
-                    statusMessage.style.display = 'none';
-                }, 3000);
-            }
+      function setLoading(on) {
+        const btn = document.querySelector('.login-button');
+        btn.disabled = on;
+        btn.textContent = on ? '로그인 중...' : '로그인';
+      }
+
+      // 데모 계정 클릭 → 자동 채우기
+      document.querySelectorAll('.demo-account').forEach((el) => {
+        el.addEventListener('click', () => {
+          const t = el.textContent;
+          if (t.includes('student1')) {
+            document.getElementById('username').value = 'student1';
+            document.getElementById('password').value = 'pass123';
+          } else if (t.includes('admin')) {
+            document.getElementById('username').value = 'admin';
+            document.getElementById('password').value = 'admin123';
+          }
+        });
+      });
+
+      // 로그인 제출
+      document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+    
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+        if (!username || !password) {
+          showMessage('아이디와 비밀번호를 모두 입력해주세요.', 'error');
+          return;
         }
 
-        // 데모 계정 클릭 시 자동 입력
-        document.querySelectorAll('.demo-account').forEach(account => {
-            account.addEventListener('click', function() {
-                const accountText = this.textContent;
-                if (accountText.includes('student1')) {
-                    document.getElementById('username').value = 'student1';
-                    document.getElementById('password').value = 'pass123';
-                } else if (accountText.includes('admin')) {
-                    document.getElementById('username').value = 'admin';
-                    document.getElementById('password').value = 'admin123';
-                }
-            });
-        });
-    </script>
+        setLoading(true);
+        try {
+          // 1) 서버리스 로그인 시도
+          const resp = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+          });
+
+          // 2) 서버가 정상 응답
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.success) {
+              // 세션 저장
+              sessionStorage.setItem('userType', data.userType);
+              sessionStorage.setItem('username', data.username || username);
+              if (data.studentInfo) {
+                sessionStorage.setItem('studentInfo', JSON.stringify(data.studentInfo));
+              }
+              showMessage(
+                data.userType === 'admin'
+                  ? '관리자로 로그인되었습니다! 관리자 페이지로 이동합니다...'
+                  : '학생으로 로그인되었습니다! 학생 페이지로 이동합니다...',
+                'success'
+              );
+              setTimeout(() => {
+                window.location.href = data.userType === 'admin' ? 'admin.html' : 'student.html';
+              }, 900);
+              return;
+            }
+            // 서버가 에러 메시지를 준 경우
+            showMessage(data.error || '로그인에 실패했습니다.', 'error');
+            return;
+          }
+
+          // 3) 서버 실패 → 데모 폴백
+          fallbackDemoLogin(username, password);
+        } catch (_) {
+          // 네트워크 실패 → 데모 폴백
+          fallbackDemoLogin(username, password);
+        } finally {
+          setLoading(false);
+        }
+      });
+   
+      // 개발단계/비상시 폴백 데모 로그인
+      function fallbackDemoLogin(username, password) {
+        if (username === 'admin' && password === 'admin123') {
+          sessionStorage.setItem('userType', 'admin');
+          sessionStorage.setItem('username', 'admin');
+          showMessage('관리자로 로그인되었습니다! 관리자 페이지로 이동합니다...', 'success');
+          setTimeout(() => (window.location.href = 'admin.html'), 900);
+          return;
+        }
+        if (username === 'student1' && password === 'pass123') {
+          const demoInfo = { name: '김학생', class: '1반', grade: '3학년' };
+          sessionStorage.setItem('userType', 'student');
+          sessionStorage.setItem('username', 'student1');
+          sessionStorage.setItem('studentInfo', JSON.stringify(demoInfo));
+          showMessage('학생으로 로그인되었습니다! 학생 페이지로 이동합니다...', 'success');
+          setTimeout(() => (window.location.href = 'student.html'), 900);
+          return;
+        }
+        showMessage('아이디 또는 비밀번호가 올바르지 않습니다.', 'error');
+      }
+   </script>
+
+    
 </body>
+
 </html>
