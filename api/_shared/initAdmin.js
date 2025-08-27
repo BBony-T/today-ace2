@@ -27,3 +27,4 @@ export default function initAdmin() {
   admin.initializeApp({ credential: admin.credential.cert(creds) });
   return admin.app();
 }
+
