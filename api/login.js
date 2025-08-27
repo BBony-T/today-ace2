@@ -1,81 +1,50 @@
-// api/login.js — 로그인 API (Admin SDK, 키 노출 없음)
-import { db } from './_fb.js'; // 공통 Admin 초기화 유틸: api/_fb.js
+// /api/login.js
+import bcrypt from 'bcryptjs';
+import initAdmin from './_shared/initAdmin.js';
+import { getFirestore } from 'firebase-admin/firestore';
 
 export default async function handler(req, res) {
-  // 같은 도메인에서만 호출하면 CORS 불필요
-  // 다른 도메인에서 호출한다면 아래 3줄을 주석 해제하세요.
-  // res.setHeader('Access-Control-Allow-Origin', '*');
-  // res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  // res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') return res.status(200).end(); // (CORS 프리플라이트 대응)
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-    const { username, password } = body;
+    initAdmin();
+    const db = getFirestore();
 
-    // 입력 검증
+    const { username, password } = req.body || {};
     if (!username || !password) {
-      return res.status(400).json({
-        success: false,
-        error: '아이디와 비밀번호를 입력해주세요.'
-      });
+      return res.status(400).json({ success: false, error: 'Missing fields' });
     }
 
-    // 관리자(교사) 계정 — 필요하면 Firestore에 옮겨도 됨
-    if (username === 'admin' && password === 'admin123') {
-      return res.status(200).json({
-        success: true,
-        userType: 'admin',
-        username,
-        message: '관리자로 로그인되었습니다.'
-      });
-    }
-
-    // ─────────────────────────────────────────────
-    // 학생 계정 확인 (Firestore, Admin SDK)
-    // 컬렉션: students
-    // 문서 예시: { username: "student1", password: "pass123", name: "김학생", class: "1반", grade: "3학년" }
-    // 현재는 where로 조회(당장 동작). 추후 비밀번호 해시/문서ID 설계로 변경 권장(아래 참고).
-    // ─────────────────────────────────────────────
-    let snap = await db()
-      .collection('students')
+    const snap = await db.collection('users')
       .where('username', '==', username)
-      .where('password', '==', password)
+      .where('isActive', '==', true)
       .limit(1)
       .get();
 
-    if (!snap.empty) {
-      const data = snap.docs[0].data();
-
-      return res.status(200).json({
-        success: true,
-        userType: 'student',
-        username,
-        studentInfo: {
-          name: data.name || username,
-          class: data.class || '',
-          grade: data.grade || '',
-          // 필요하면 기타 필드 추가
-        },
-        message: '학생으로 로그인되었습니다.'
-      });
+    if (snap.empty) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
-    // 로그인 실패
-    return res.status(401).json({
-      success: false,
-      error: '아이디 또는 비밀번호가 잘못되었습니다.'
-    });
+    const doc = snap.docs[0];
+    const user = doc.data();
 
-  } catch (error) {
-    console.error('로그인 API 오류:', error);
-    return res.status(500).json({
-      success: false,
-      error: '서버 오류가 발생했습니다.'
+    const ok = await bcrypt.compare(password, user.passwordHash || '');
+    if (!ok) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    }
+
+    const role = user.role || 'student';
+    const isAdmin = role === 'admin' || role === 'superadmin';
+
+    return res.status(200).json({
+      success: true,
+      userType: isAdmin ? 'admin' : 'student',
+      role,
+      username: user.username,
+      studentInfo: isAdmin ? undefined : (user.studentInfo || null),
     });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ success: false, error: 'Server error' });
   }
 }
