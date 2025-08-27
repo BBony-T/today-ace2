@@ -179,7 +179,7 @@
             background-color: #ffb700;
             transform: translateY(-1px);
         }
-
+        
         /* 학생 현황 테이블 */
         .student-status-grid {
             display: grid;
@@ -483,7 +483,12 @@
                 </div>
                 <div id="classInfo" style="text-align: center; color: #666; margin-bottom: 15px;"></div>
             </div>
-
+            
+            <div class="card orange" id="rosterListCard">
+              <h3>📚 저장된 명부</h3>
+              <div id="rosterList" style="font-size:13px;color:#2d3748;"></div>
+            </div>
+            
             <!-- 학생 현황판 -->
             <div class="card purple">
                 <h3>👥 학생 현황판</h3>
@@ -747,11 +752,6 @@
           document.getElementById('pendingCount').textContent = '0명';
           document.getElementById('notStartedCount').textContent = '0명';
         }
-
-        <div class="card orange" id="rosterListCard">
-          <h3>📚 저장된 명부</h3>
-          <div id="rosterList" style="font-size:13px;color:#2d3748;"></div>
-        </div>
 
         
         // 학생 현황 표시
@@ -1358,7 +1358,15 @@
                 window.location.href = 'login.html';
             }
         }
-
+        
+        //필터
+        function getCurrentFilter() {
+          const year = document.getElementById('yearSelect')?.value || '';
+          const subject = document.getElementById('subjectSelect')?.value || '';
+          const club = document.getElementById('clubSelect')?.value || '';
+          return { year, subject, club };
+        }
+        
         // 메시지 표시
         function showMessage(message, type) {
             // 기존 메시지 제거
@@ -1392,6 +1400,7 @@
 </body>
 
 </html>
+
 
 
 
