@@ -355,6 +355,26 @@
                     return;
                 }
 
+                // (하드코딩 모두 실패 시) 서버 로그인 시도 — Firestore students 컬렉션 기준
+                const res = await fetch('/api/login', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (data.success) {
+                  sessionStorage.setItem('userType', data.userType);
+                  sessionStorage.setItem('username', data.username);
+                  if (data.studentInfo) {
+                    sessionStorage.setItem('studentInfo', JSON.stringify(data.studentInfo));
+                  }
+                  showSuccess(data.message || '로그인되었습니다!');
+                  setTimeout(() => {
+                    window.location.href = data.userType === 'admin' ? 'admin.html' : 'student.html';
+                  }, 800);
+                  return;
+                }
+                
                 showError('아이디 또는 비밀번호가 잘못되었습니다.');
 
             } catch (error) {
@@ -396,6 +416,7 @@
     </script>
 </body>
 </html>
+
 
 
 
