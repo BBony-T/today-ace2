@@ -651,20 +651,47 @@
         }
 
         // 학생 현황 로드
-        function loadStudentStatus() {
-            const year = document.getElementById('yearSelect').value;
-            const subject = document.getElementById('subjectSelect').value;
-            const club = document.getElementById('clubSelect').value;
+        async function loadStudentStatus() {
+          const year = document.getElementById('yearSelect').value;
+          const subject = document.getElementById('subjectSelect').value;
+          const club = document.getElementById('clubSelect').value;
 
-            // 실제 데이터가 있으면 실제 데이터 사용, 없으면 더미 데이터 사용
-            const actualData = getActualStudentStatus();
-            const studentData = actualData.length > 0 ? actualData : generateDummyStudents();
-            
+          try {
+            const qs = new URLSearchParams({ year, subject, club });
+            const res = await fetch(`/api/admin/list-students?${qs.toString()}`);
+            const j = await res.json();
+
+            // 기대 포맷: [{ name, studentId, class, status?, hasPeerEvaluation?, hasSelfEvaluation?, lastUpdate? }, ...]
+            let studentData = [];
+            if (res.ok && j.success && Array.isArray(j.students)) {
+              studentData = j.students.map(s => ({
+                name: s.name,
+                studentId: s.studentId,
+                status: s.status || 'not-started',
+                hasPeerEvaluation: !!s.hasPeerEvaluation,
+                hasSelfEvaluation: !!s.hasSelfEvaluation,
+                lastUpdate: s.lastUpdate || '미참여'
+              }));
+            }
+
+            // 서버 데이터가 비었으면 더미로 표시(초기 단계 UX용)
+            if (studentData.length === 0) {
+              studentData = generateDummyStudents();
+            }
+
             currentStudentData = studentData;
-
             displayStudentStatus(studentData);
             updateClassInfo(year, subject, club);
+          } catch (e) {
+            console.error('현황 조회 오류:', e);
+            showMessage('현황 조회 중 오류가 발생했습니다.', 'error');
+            const fallback = generateDummyStudents();
+            currentStudentData = fallback;
+            displayStudentStatus(fallback);
+            updateClassInfo(year, subject, club);
+          }
         }
+
 
         // 더미 학생 데이터 생성 (실제 저장 데이터 기반)
         function generateDummyStudents() {
@@ -694,72 +721,6 @@
                     lastUpdate: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
                 };
             });
-        }
-
-        // 실제 localStorage 데이터로 학생 현황 확인하는 함수 (실제 구현용)
-        function getActualStudentStatus() {
-            try {
-                const evaluationHistory = JSON.parse(localStorage.getItem('evaluationHistory') || '[]');
-                const roster = JSON.parse(localStorage.getItem('classRoster') || '[]');
-                
-                // 현재 선택된 클래스 정보
-                const currentYear = document.getElementById('yearSelect').value;
-                const currentSubject = document.getElementById('subjectSelect').value;
-                const currentClub = document.getElementById('clubSelect').value;
-                
-                // 해당 클래스 학생들 필터링
-                const classStudents = roster.filter(student => 
-                    student.year === currentYear &&
-                    (!currentSubject || student.subject === currentSubject) &&
-                    (!currentClub || student.club === currentClub)
-                );
-                
-                return classStudents.map(student => {
-                    // 해당 학생의 평가 데이터 찾기
-                    const studentEvaluations = evaluationHistory.filter(eval => 
-                        eval.student === student.name
-                    );
-                    
-                    let hasPeerEvaluation = false;
-                    let hasSelfEvaluation = false;
-                    let lastUpdate = null;
-                    
-                    studentEvaluations.forEach(evaluation => {
-                        if (evaluation.peerEvaluations && evaluation.peerEvaluations.length > 0) {
-                            hasPeerEvaluation = true;
-                        }
-                        if (evaluation.selfEvaluation) {
-                            hasSelfEvaluation = true;
-                        }
-                        if (!lastUpdate || evaluation.date > lastUpdate) {
-                            lastUpdate = evaluation.date;
-                        }
-                    });
-                    
-                    // 완료도 결정
-                    let status;
-                    if (hasPeerEvaluation && hasSelfEvaluation) {
-                        status = 'completed'; // 둘 다 완료
-                    } else if (hasPeerEvaluation || hasSelfEvaluation) {
-                        status = 'pending'; // 하나만 완료  
-                    } else {
-                        status = 'not-started'; // 둘 다 미완료
-                    }
-                    
-                    return {
-                        name: student.name,
-                        studentId: student.studentId,
-                        status: status,
-                        hasPeerEvaluation: hasPeerEvaluation,
-                        hasSelfEvaluation: hasSelfEvaluation,
-                        lastUpdate: lastUpdate || '미참여'
-                    };
-                });
-                
-            } catch (error) {
-                console.error('데이터 로드 오류:', error);
-                return [];
-            }
         }
 
         // 학생 현황 표시
@@ -1319,3 +1280,4 @@
 </body>
 
 </html>
+
