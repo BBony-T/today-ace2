@@ -347,7 +347,7 @@
     <div class="sidebar">
         <div class="sidebar-header">
             <h2>🌟 학생 메뉴</h2>
-            <p>김학생님, 안녕하세요!</p>
+            <p id="greet">안녕하세요!</p>
         </div>
         
         <button class="menu-item" onclick="goToInputPage()">📝 입력 페이지</button>
@@ -433,265 +433,291 @@
     </div>
 
     <script>
-        let competencyChart = null;
-        let trendChart = null;
+      // ========= 세션에서 사용자 정보 로드 & 인사 =========
+      const ss = window.sessionStorage;
+      const username = ss.getItem('username') || 'student1'; // 로그인 아이디
+      let studentDisplayName = username;
 
-        // 페이지 로드 시 실행
-        document.addEventListener('DOMContentLoaded', function() {
-            loadCareerInterest();
-            loadStats();
+      try {
+        const infoRaw = ss.getItem('studentInfo');
+        if (infoRaw) {
+          const info = typeof infoRaw === 'string' ? JSON.parse(infoRaw) : infoRaw;
+          if (info && (info.name || info.studentName)) {
+            studentDisplayName = info.name || info.studentName;
+          }
+        }
+      } catch (e) {}
+
+      document.addEventListener('DOMContentLoaded', function () {
+        const greet = document.getElementById('greet');
+        if (greet) greet.textContent = `${studentDisplayName}님, 안녕하세요!`;
+        loadCareerInterest();
+        loadStats();
+      });
+
+      // ========= 경로 이동/로그아웃 =========
+      function goToInputPage() { window.location.href = 'student.html'; }
+      function logout() {
+        if (confirm('정말로 로그아웃하시겠습니까?')) {
+          sessionStorage.clear();
+          window.location.href = 'index.html';
+        }
+      }
+
+      // ========= 진로/관심분야 저장 (로컬 유지) =========
+      function saveCareerInterest() {
+        const v = document.getElementById('careerInterest').value.trim();
+        localStorage.setItem(`career:${username}`, v);
+        const msg = document.getElementById('careerMessage');
+        msg.textContent = '저장되었어요.';
+        setTimeout(() => (msg.textContent = ''), 2000);
+      }
+      function loadCareerInterest() {
+        const v = localStorage.getItem(`career:${username}`) || '';
+        const el = document.getElementById('careerInterest');
+        if (el) el.value = v;
+      }
+
+     // ========= 통계 로드: 서버 우선 → 실패 시 localStorage 폴백 =========
+      let competencyChart = null;
+      let trendChart = null;
+
+      async function loadStats() {
+        try {
+          // 1) 서버에서 나에 대한 평가 조회 (동료/자기 포함 필터된 결과)
+          const res = await fetch(`/api/get-evaluations?targetUsername=${encodeURIComponent(username)}`);
+          if (!res.ok) throw new Error('API 실패');
+          const json = await res.json();
+          if (!json?.success) throw new Error(json?.error || 'API 오류');
+
+          const data = json.evaluations || [];
+          if (!data.length) { showNoDataMessage(); return; }
+
+          const filtered = filterByPeriod_serverShape(data);
+          const stats = calculateStats_mixed(filtered);
+          renderStats(stats);
+
+        } catch (e) {
+          console.warn('API 조회 실패, localStorage 폴백 사용:', e?.message || e);
+
+          const allLocal = JSON.parse(localStorage.getItem('evaluationHistory') || '[]');
+          if (!allLocal.length) { showNoDataMessage(); return; }
+          const filtered = filterByPeriod_localShape(allLocal);
+          const stats = calculateStats_mixed(filtered);
+          renderStats(stats);
+        }
+      }
+
+      // ========= 기간 필터(서버/로컬 각각의 데이터 모양 대응) =========
+      function getPeriodRange() {
+        const type = document.getElementById('periodType').value;
+        const now = new Date();
+        const from = new Date(now); // 복사
+
+        const cloneShiftMonths = (d, m) => { const c = new Date(d); c.setMonth(c.getMonth() - m); return c; };
+
+        switch (type) {
+          case '1month': return { from: cloneShiftMonths(now, 1) };
+          case '2month': return { from: cloneShiftMonths(now, 2) };
+          case '3month': return { from: cloneShiftMonths(now, 3) };
+          case '6month': return { from: cloneShiftMonths(now, 6) };
+          case 'all':
+          default:       return { from: null };
+        }
+      }
+
+      function filterByPeriod_serverShape(list) {
+        // 서버 형식 예시:
+        // { date: 'YYYY-MM-DD', peerEvaluations: [{ competency, nominees: [...], reasons: [...] }], evaluatorUsername, ... }
+        const { from } = getPeriodRange();
+        if (!from) return list;
+        return list.filter(it => {
+          const d = new Date(it.date || it.timestamp || 0);
+          return d >= from;
+        });
+      }
+
+      function filterByPeriod_localShape(list) {
+        // 로컬 형식 예시(student.html 폴백 저장):
+        // { date: 'YYYY-MM-DD', peerEvaluations: [{ competency, name, reason }], selfEvaluation: {...} }
+        const { from } = getPeriodRange();
+        if (!from) return list;
+        return list.filter(it => new Date(it.date) >= from);
+      }
+
+      // ========= 통계 계산 (서버/로컬 혼합 포맷 지원) =========
+      function calculateStats_mixed(data) {
+        const competencyCounts = {
+          '자신감과 리더십': 0,
+          '분석': 0,
+          '아이디어 뱅크': 0,
+          '감정 이해': 0,
+          '의사소통': 0,
+          '협동심': 0
+        };
+        const monthlyData = {};
+        const uniqueDays = new Set();
+        let totalEvaluations = 0;
+
+        data.forEach(ev => {
+          const dateStr = (ev.date || ev.timestamp || '').toString().slice(0, 10); // YYYY-MM-DD
+          if (dateStr) uniqueDays.add(dateStr);
+          const monthKey = dateStr ? dateStr.slice(0, 7) : '기타';
+          if (!monthlyData[monthKey]) monthlyData[monthKey] = 0;
+
+          // --- 서버 포맷 처리 ---
+          // peerEvaluations: [{ competency, nominees:[...], reasons:[...] }]
+          // "나"가 nominees 에 포함된 경우를 횟수로 계산
+          if (Array.isArray(ev.peerEvaluations) && ev.peerEvaluations.length) {
+            ev.peerEvaluations.forEach(p => {
+              const comp = p.competency;
+              const nominatedCount =
+                Array.isArray(p.nominees)
+                  ? p.nominees.filter(n => normalize(n) === normalize(username) || normalize(n) === normalize(studentDisplayName)).length
+                  : 0;
+              if (competencyCounts.hasOwnProperty(comp) && nominatedCount > 0) {
+                competencyCounts[comp] += nominatedCount;
+                totalEvaluations += nominatedCount;
+                monthlyData[monthKey] += nominatedCount;
+              }
+            });
+          }
+
+          // --- 로컬 포맷 처리(이 프로젝트 기존 저장 형태) ---
+          // peerEvaluations: [{ competency, name, reason }]
+          // name이 나와 일치하면 카운트
+          if (Array.isArray(ev.peerEvaluations) && ev.peerEvaluations.length) {
+            ev.peerEvaluations.forEach(p => {
+              const comp = p.competency;
+              const isMe =
+                p && typeof p.name === 'string' &&
+                (normalize(p.name) === normalize(username) || normalize(p.name) === normalize(studentDisplayName));
+              if (competencyCounts.hasOwnProperty(comp) && isMe) {
+                competencyCounts[comp] += 1;
+                totalEvaluations += 1;
+                monthlyData[monthKey] += 1;
+              }
+            });
+          }
         });
 
-        function setupEventListeners() {
-            // 기간 선택 변경 시
-            document.getElementById('periodType').addEventListener('change', function() {
-                const customInputs = ['startDate', 'endDate', 'dateSeparator'];
-                if (this.value === 'custom') {
-                    customInputs.forEach(id => {
-                        document.getElementById(id).style.display = 'inline-block';
-                    });
-                } else {
-                    customInputs.forEach(id => {
-                        document.getElementById(id).style.display = 'none';
-                    });
-                }
-            });
+        // 가장 많이 받은 에이스
+        const entries = Object.entries(competencyCounts);
+        entries.sort((a, b) => b[1] - a[1]);
+        const topCompetency = entries[0] && entries[0][1] > 0 ? entries[0][0] : '-';
+
+        return {
+          competencyCounts,
+          monthlyData,
+          totalEvaluations,
+          topCompetency,
+          evaluationDays: uniqueDays.size
+        };
+      }
+
+      function normalize(s) {
+        return (s || '').toString().trim().toLowerCase();
+      }
+
+      // ========= UI 렌더링 =========
+      function renderStats(stats) {
+        updateSummaryStats(stats);
+        updateCharts(stats);
+        updateAIAdvice(stats);
+      }
+
+      function updateSummaryStats(stats) {
+        document.getElementById('totalEvaluations').textContent = stats.totalEvaluations;
+        document.getElementById('topCompetency').textContent = stats.topCompetency;
+        document.getElementById('evaluationDays').textContent = stats.evaluationDays;
+      }
+
+      function updateCharts(stats) {
+        updateCompetencyChart(stats.competencyCounts);
+        updateTrendChart(stats.monthlyData);
+      }
+
+      function updateCompetencyChart(competencyCounts) {
+        const ctx = document.getElementById('competencyChart').getContext('2d');
+        if (competencyChart) competencyChart.destroy();
+
+        const labels = Object.keys(competencyCounts);
+        const data = Object.values(competencyCounts);
+        const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f7b731', '#5f27cd', '#00d2d3'];
+
+        competencyChart = new Chart(ctx, {
+          type: 'doughnut',
+          data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } }
+          }
+        });
+      }
+
+      function updateTrendChart(monthlyData) {
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        if (trendChart) trendChart.destroy();
+
+        const months = Object.keys(monthlyData).sort();
+        const values = months.map(m => monthlyData[m]);
+
+        trendChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: months.map(m => m.substring(5)), // 'YYYY-MM' → 'MM'
+            datasets: [{
+              label: '월별 추천 횟수',
+             data: values,
+              borderColor: '#c77dff',
+              backgroundColor: 'rgba(199,125,255,0.1)',
+              borderWidth: 3,
+              fill: true,
+              tension: 0.4
+            }]
+          },
+          options: {
+           responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      }
+
+      // ========= AI 조언(간단 로직 유지) =========
+      function updateAIAdvice(stats) {
+        let advice = '';
+        if (stats.totalEvaluations === 0) {
+          advice = '아직 친구들의 평가가 없네요! 더 많은 활동에 참여해보세요.';
+        } else {
+          const topSkill = stats.topCompetency;
+          advice = `🌟 축하해요! "${topSkill}" 분야에서 가장 많은 인정을 받았어요. `;
+
+          if (topSkill === '자신감과 리더십')      advice += '리더십을 더욱 발전시키기 위해 팀원들의 의견을 더 많이 들어보세요.';
+          else if (topSkill === '분석')           advice += '뛰어난 분석력을 바탕으로 창의적인 아이디어도 제안해보세요.';
+          else if (topSkill === '아이디어 뱅크')   advice += '훌륭한 아이디어들을 현실로 만들어보는 실행력도 길러보세요.';
+          else if (topSkill === '감정 이해')       advice += '뛰어난 공감능력을 활용해 팀의 분위기 메이커 역할을 해보세요.';
+          else if (topSkill === '의사소통')         advice += '소통 능력을 바탕으로 팀 내 갈등 해결사 역할을 해보세요.';
+          else if (topSkill === '협동심')           advice += '팀워크를 중시하는 당신, 프로젝트 매니저 역할에 도전해보세요.';
+
+          advice += `\n\n📈 총 ${stats.totalEvaluations}번의 추천을 받았고, ${stats.evaluationDays}일 동안 꾸준히 참여했네요!`;
         }
-
-        function loadStats() {
-            try {
-                // localStorage에서 데이터 불러오기
-                const allData = JSON.parse(localStorage.getItem('evaluationHistory') || '[]');
-                
-                if (allData.length === 0) {
-                    showNoDataMessage();
-                    return;
-                }
-
-                // 기간 필터링
-                const filteredData = filterDataByPeriod(allData);
-                
-                // 통계 계산
-                const stats = calculateStats(filteredData);
-                
-                // UI 업데이트
-                updateSummaryStats(stats);
-                updateCharts(stats);
-                updateAIAdvice(stats);
-
-            } catch (error) {
-                console.error('데이터 로드 오류:', error);
-                showNoDataMessage();
-            }
-        }
-
-        function filterDataByPeriod(data) {
-            const periodType = document.getElementById('periodType').value;
-            const now = new Date();
-            
-            switch (periodType) {
-                case '1month':
-                    const oneMonthAgo = new Date(now.setMonth(now.getMonth() - 1));
-                    return data.filter(item => new Date(item.date) >= oneMonthAgo);
-                    
-                case '2month':
-                    const twoMonthAgo = new Date(now.setMonth(now.getMonth() - 2));
-                    return data.filter(item => new Date(item.date) >= twoMonthAgo);
-                    
-                case '3month':
-                    const threeMonthAgo = new Date(now.setMonth(now.getMonth() - 3));
-                    return data.filter(item => new Date(item.date) >= threeMonthAgo);
-                    
-                case '6month':
-                    const sixMonthAgo = new Date(now.setMonth(now.getMonth() - 6));
-                    return data.filter(item => new Date(item.date) >= sixMonthAgo);
-                    
-                case 'all':
-                default:
-                    return data;
-            }
-        }
-
-        function calculateStats(data) {
-            const competencyCounts = {
-                '자신감과 리더십': 0,
-                '분석': 0,
-                '아이디어 뱅크': 0,
-                '감정 이해': 0,
-                '의사소통': 0,
-                '협동심': 0
-            };
-
-            const monthlyData = {};
-            let totalEvaluations = 0;
-            const uniqueDays = new Set();
-
-            data.forEach(evaluation => {
-                // 동료평가에서 나를 추천한 횟수 계산 (실제로는 다른 학생들의 데이터에서)
-                evaluation.peerEvaluations.forEach(peer => {
-                    if (competencyCounts.hasOwnProperty(peer.competency)) {
-                        competencyCounts[peer.competency]++;
-                        totalEvaluations++;
-                    }
-                });
-
-                // 월별 데이터
-                const monthKey = evaluation.date.substring(0, 7); // YYYY-MM
-                monthlyData[monthKey] = (monthlyData[monthKey] || 0) + evaluation.peerEvaluations.length;
-
-                // 참여 일수
-                uniqueDays.add(evaluation.date);
-            });
-
-            // 가장 많이 받은 에이스
-            const topCompetency = Object.entries(competencyCounts)
-                .sort(([,a], [,b]) => b - a)[0];
-
-            return {
-                competencyCounts,
-                monthlyData,
-                totalEvaluations,
-                topCompetency: topCompetency[1] > 0 ? topCompetency[0] : '-',
-                evaluationDays: uniqueDays.size
-            };
-        }
-
-        function updateSummaryStats(stats) {
-            document.getElementById('totalEvaluations').textContent = stats.totalEvaluations;
-            document.getElementById('topCompetency').textContent = stats.topCompetency;
-            document.getElementById('evaluationDays').textContent = stats.evaluationDays;
-        }
-
-        function updateCharts(stats) {
-            updateCompetencyChart(stats.competencyCounts);
-            updateTrendChart(stats.monthlyData);
-        }
-
-        function updateCompetencyChart(competencyCounts) {
-            const ctx = document.getElementById('competencyChart').getContext('2d');
-            
-            if (competencyChart) {
-                competencyChart.destroy();
-            }
-
-            const labels = Object.keys(competencyCounts);
-            const data = Object.values(competencyCounts);
-            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f7b731', '#5f27cd', '#00d2d3'];
-
-            competencyChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: colors,
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                font: {
-                                    size: 11
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function updateTrendChart(monthlyData) {
-            const ctx = document.getElementById('trendChart').getContext('2d');
-            
-            if (trendChart) {
-                trendChart.destroy();
-            }
-
-            const sortedMonths = Object.keys(monthlyData).sort();
-            const data = sortedMonths.map(month => monthlyData[month]);
-
-            trendChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: sortedMonths.map(month => month.substring(5)), // MM만 표시
-                    datasets: [{
-                        label: '월별 추천 횟수',
-                        data: data,
-                        borderColor: '#c77dff',
-                        backgroundColor: 'rgba(199, 125, 255, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-        }
-
-        function updateAIAdvice(stats) {
-            let advice = '';
-            
-            if (stats.totalEvaluations === 0) {
-                advice = '아직 친구들의 평가가 없네요! 더 많은 활동에 참여해보세요.';
-            } else {
-                const topSkill = stats.topCompetency;
-                advice = `🌟 축하해요! "${topSkill}" 분야에서 가장 많은 인정을 받았어요. `;
-                
-                if (topSkill === '자신감과 리더십') {
-                    advice += '리더십을 더욱 발전시키기 위해 팀원들의 의견을 더 많이 들어보세요.';
-                } else if (topSkill === '분석') {
-                    advice += '뛰어난 분석력을 바탕으로 창의적인 아이디어도 제안해보세요.';
-                } else if (topSkill === '아이디어 뱅크') {
-                    advice += '훌륭한 아이디어들을 현실로 만들어보는 실행력도 기러보세요.';
-                } else if (topSkill === '감정 이해') {
-                    advice += '뛰어난 공감능력을 활용해 팀의 분위기 메이커 역할을 해보세요.';
-                } else if (topSkill === '의사소통') {
-                    advice += '소통 능력을 바탕으로 팀 내 갈등 해결사 역할을 해보세요.';
-                } else if (topSkill === '협동심') {
-                    advice += '팀워크를 중시하는 당신, 프로젝트 매니저 역할에 도전해보세요.';
-                }
-                
-                advice += `\n\n📈 총 ${stats.totalEvaluations}번의 추천을 받았고, ${stats.evaluationDays}일 동안 꾸준히 참여했네요!`;
-            }
-            
-            document.getElementById('aiAdvice').textContent = advice;
-        }
-
-        function showNoDataMessage() {
-            document.getElementById('totalEvaluations').textContent = '0';
-            document.getElementById('topCompetency').textContent = '-';
-            document.getElementById('evaluationDays').textContent = '0';
-            document.getElementById('aiAdvice').textContent = '아직 평가 데이터가 없습니다. 입력 페이지에서 평가를 작성해주세요!';
-        }
-
-        function goToInputPage() {
-            window.location.href = 'student.html';
-        }
-
-        function logout() {
-            if (confirm('정말로 로그아웃하시겠습니까?')) {
-                window.location.href = 'login.html';
-            }
-        }
+        document.getElementById('aiAdvice').textContent = advice;
+      }
+ 
+      // ========= 데이터 없음 표시 =========
+      function showNoDataMessage() {
+        document.getElementById('totalEvaluations').textContent = '0';
+        document.getElementById('topCompetency').textContent = '-';
+        document.getElementById('evaluationDays').textContent = '0';
+        document.getElementById('aiAdvice').textContent =
+          '아직 평가 데이터가 없습니다. 입력 페이지에서 평가를 작성해주세요!';
+        // 차트도 비워주기
+        if (competencyChart) { competencyChart.destroy(); competencyChart = null; }
+        if (trendChart) { trendChart.destroy(); trendChart = null; }
+      }
     </script>
+    
 </body>
+
 </html>
