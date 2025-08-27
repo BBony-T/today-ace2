@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 에이스는?</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #fff8f0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: -50px;
+            left: -50px;
+            width: 150px;
+            height: 150px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20 50 L35 25 L65 25 L80 50 L65 75 L35 75 Z" fill="%23ffd93d" stroke="none"/></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+            opacity: 0.6;
+            z-index: 0;
+        }
+
+        body::after {
+            content: '';
+            position: absolute;
+            bottom: -30px;
+            right: -30px;
+            width: 120px;
+            height: 120px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 10 C70 20, 90 40, 80 60 C70 80, 30 80, 20 60 C10 40, 30 20, 50 10 Z" fill="%23c77dff" stroke="none"/></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+            opacity: 0.5;
+            z-index: 0;
+        }
+
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 25px;
+            box-shadow: 0 20px 40px rgba(255, 217, 61, 0.2);
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+            border: 3px solid #ffe0b3;
+        }
+
+        .logo {
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            color: #2d3748;
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .logo p {
+            color: #4a5568;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            color: #2d3748;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ffd93d;
+            border-radius: 15px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #fffef7;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #ffb700;
+            box-shadow: 0 0 0 3px rgba(255, 217, 61, 0.2);
+            background: white;
+        }
+
+        .login-button {
+            width: 100%;
+            background-color: #ffd93d;
+            color: #2d3748;
+            border: none;
+            padding: 16px;
+            border-radius: 15px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(255, 217, 61, 0.4);
+            background-color: #ffb700;
+        }
+
+        .login-button:active {
+            transform: translateY(0);
+        }
+
+        .demo-accounts {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #fff5e6;
+            border-radius: 15px;
+            text-align: left;
+            border: 2px solid #ffe0b3;
+        }
+
+        .demo-accounts h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .demo-account {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #4a5568;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .demo-account:hover {
+            background-color: #ffd93d;
+            transform: translateX(5px);
+            color: #2d3748;
+        }
+
+        .demo-account:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .success {
+            background-color: #e6fffa;
+            color: #234e52;
+            border: 2px solid #81e6d9;
+        }
+
+        .error {
+            background-color: #ffe6e6;
+            color: #c53030;
+            border: 2px solid #fc8181;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <h1>🌟 오늘의 에이스는?</h1>
+            <p>따뜻한 마음으로 함께 성장해요!</p>
+        </div>
+
+        <form id="loginForm">
+            <div class="input-group">
+                <label for="username">아이디</label>
+                <input type="text" id="username" name="username" placeholder="아이디를 입력하세요" required>
+            </div>
+
+            <div class="input-group">
+                <label for="password">비밀번호</label>
+                <input type="password" id="password" name="password" placeholder="비밀번호를 입력하세요" required>
+            </div>
+
+            <button type="submit" class="login-button">로그인</button>
+        </form>
+
+        <div class="status-message" id="statusMessage"></div>
+
+        <!-- 데모용 계정 정보 -->
+        <div class="demo-accounts">
+            <h3>📝 데모 계정</h3>
+            <div class="demo-account">
+                <span><strong>학생:</strong> student1</span>
+                <span>pass123</span>
+            </div>
+            <div class="demo-account">
+                <span><strong>관리자:</strong> admin</span>
+                <span>admin123</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const statusMessage = document.getElementById('statusMessage');
+            
+            // 간단한 로그인 검증 (실제 프로젝트에서는 서버에서 처리)
+            if (username === 'admin' && password === 'admin123') {
+                showMessage('관리자로 로그인되었습니다! 관리자 페이지로 이동합니다...', 'success');
+                setTimeout(() => {
+                    // 실제로는 관리자 페이지로 이동
+                    alert('관리자 페이지로 이동 (아직 구현 전)');
+                }, 1500);
+            } else if (username === 'student1' && password === 'pass123') {
+                showMessage('학생으로 로그인되었습니다! 학생 페이지로 이동합니다...', 'success');
+                setTimeout(() => {
+                    // 실제로는 학생 페이지로 이동
+                    alert('학생 페이지로 이동 (아직 구현 전)');
+                }, 1500);
+            } else if (username === '' || password === '') {
+                showMessage('아이디와 비밀번호를 모두 입력해주세요.', 'error');
+            } else {
+                showMessage('아이디 또는 비밀번호가 올바르지 않습니다.', 'error');
+            }
+        });
+
+        function showMessage(message, type) {
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type}`;
+            statusMessage.style.display = 'block';
+            
+            if (type === 'error') {
+                setTimeout(() => {
+                    statusMessage.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        // 데모 계정 클릭 시 자동 입력
+        document.querySelectorAll('.demo-account').forEach(account => {
+            account.addEventListener('click', function() {
+                const accountText = this.textContent;
+                if (accountText.includes('student1')) {
+                    document.getElementById('username').value = 'student1';
+                    document.getElementById('password').value = 'pass123';
+                } else if (accountText.includes('admin')) {
+                    document.getElementById('username').value = 'admin';
+                    document.getElementById('password').value = 'admin123';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

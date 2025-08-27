@@ -1,0 +1,23 @@
+{
+  "name": "today-ace",
+  "version": "1.0.0",
+  "description": "오늘의 에이스는? - 동료평가/자기평가 웹사이트",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo 'Static site - no build needed'",
+    "start": "echo 'Static site deployed'",
+    "dev": "echo 'Development mode'"
+  },
+  "keywords": [
+    "education",
+    "peer-evaluation", 
+    "self-assessment",
+    "static-site"
+  ],
+  "author": "BBony-T",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BBony-T/today-ace.git"
+  }
+}

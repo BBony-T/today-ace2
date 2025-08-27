@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 테스트 페이지</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .test-section {
+            background: white;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .test-section h2 {
+            color: #333;
+            border-bottom: 2px solid #ffd93d;
+            padding-bottom: 10px;
+        }
+        
+        button {
+            background-color: #ffd93d;
+            color: #333;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: bold;
+        }
+        
+        button:hover {
+            background-color: #ffb700;
+        }
+        
+        .result {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .success {
+            border-left: 4px solid #28a745;
+        }
+        
+        .error {
+            border-left: 4px solid #dc3545;
+        }
+        
+        input, select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 오늘의 에이스 API 테스트</h1>
+    
+    <!-- 1. 로그인 API 테스트 -->
+    <div class="test-section">
+        <h2>1. 로그인 API 테스트</h2>
+        <div>
+            <input type="text" id="loginUsername" placeholder="아이디" value="admin">
+            <input type="password" id="loginPassword" placeholder="비밀번호" value="admin123">
+            <button onclick="testLogin()">로그인 테스트</button>
+        </div>
+        <div>
+            <button onclick="testLogin('student1', 'pass123')">학생 로그인 테스트</button>
+            <button onclick="testLogin('wrong', 'wrong')">잘못된 정보 테스트</button>
+        </div>
+        <div id="loginResult" class="result" style="display: none;"></div>
+    </div>
+
+    <!-- 2. 평가 저장 API 테스트 -->
+    <div class="test-section">
+        <h2>2. 평가 저장 API 테스트</h2>
+        <div>
+            <input type="text" id="evaluatorName" placeholder="평가자 이름" value="student1">
+            <button onclick="testSaveEvaluation()">평가 저장 테스트</button>
+        </div>
+        <div id="saveResult" class="result" style="display: none;"></div>
+    </div>
+
+    <!-- 3. 평가 조회 API 테스트 -->
+    <div class="test-section">
+        <h2>3. 평가 조회 API 테스트</h2>
+        <div>
+            <input type="text" id="targetUser" placeholder="조회할 사용자" value="student1">
+            <select id="evaluationType">
+                <option value="all">모든 평가</option>
+                <option value="peer">동료평가만</option>
+                <option value="self">자기평가만</option>
+            </select>
+            <button onclick="testGetEvaluations()">평가 조회 테스트</button>
+        </div>
+        <div id="getResult" class="result" style="display: none;"></div>
+    </div>
+
+    <!-- 4. 전체 테스트 -->
+    <div class="test-section">
+        <h2>4. 전체 플로우 테스트</h2>
+        <button onclick="runFullTest()">전체 API 테스트 실행</button>
+        <div id="fullTestResult" class="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        // 로그인 API 테스트
+        async function testLogin(username, password) {
+            const loginResult = document.getElementById('loginResult');
+            loginResult.style.display = 'block';
+            loginResult.textContent = '로그인 테스트 중...';
+            loginResult.className = 'result loading';
+
+            try {
+                const user = username || document.getElementById('loginUsername').value;
+                const pass = password || document.getElementById('loginPassword').value;
+
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: user,
+                        password: pass
+                    })
+                });
+
+                const result = await response.json();
+                loginResult.textContent = `응답 상태: ${response.status}\n결과:\n${JSON.stringify(result, null, 2)}`;
+                loginResult.className = `result ${result.success ? 'success' : 'error'}`;
+
+            } catch (error) {
+                loginResult.textContent = `오류 발생:\n${error.message}`;
+                loginResult.className = 'result error';
+            }
+        }
+
+        // 평가 저장 API 테스트
+        async function testSaveEvaluation() {
+            const saveResult = document.getElementById('saveResult');
+            saveResult.style.display = 'block';
+            saveResult.textContent = '평가 저장 테스트 중...';
+            saveResult.className = 'result loading';
+
+            try {
+                const evaluatorName = document.getElementById('evaluatorName').value;
+                
+                const testData = {
+                    evaluatorUsername: evaluatorName,
+                    date: new Date().toISOString().split('T')[0],
+                    peerEvaluations: [
+                        {
+                            competency: '자신감과 리더십',
+                            nominee: 'student2',
+                            reason: '오늘 발표할 때 정말 당당했어요!'
+                        },
+                        {
+                            competency: '의사소통',
+                            nominee: 'student3',
+                            reason: '설명을 정말 잘해줬어요.'
+                        }
+                    ],
+                    selfEvaluation: {
+                        competency: '협동심',
+                        reason: '팀원들과 잘 협력했다고 생각해요.'
+                    }
+                };
+
+                const response = await fetch('/api/save-evaluation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                const result = await response.json();
+                saveResult.textContent = `응답 상태: ${response.status}\n전송 데이터:\n${JSON.stringify(testData, null, 2)}\n\n결과:\n${JSON.stringify(result, null, 2)}`;
+                saveResult.className = `result ${result.success ? 'success' : 'error'}`;
+
+            } catch (error) {
+                saveResult.textContent = `오류 발생:\n${error.message}`;
+                saveResult.className = 'result error';
+            }
+        }
+
+        // 평가 조회 API 테스트
+        async function testGetEvaluations() {
+            const getResult = document.getElementById('getResult');
+            getResult.style.display = 'block';
+            getResult.textContent = '평가 조회 테스트 중...';
+            getResult.className = 'result loading';
+
+            try {
+                const targetUser = document.getElementById('targetUser').value;
+                const evaluationType = document.getElementById('evaluationType').value;
+
+                const response = await fetch('/api/get-evaluations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        targetUsername: targetUser,
+                        evaluationType: evaluationType
+                    })
+                });
+
+                const result = await response.json();
+                getResult.textContent = `응답 상태: ${response.status}\n조회 조건: ${targetUser} (${evaluationType})\n\n결과:\n${JSON.stringify(result, null, 2)}`;
+                getResult.className = `result ${result.success ? 'success' : 'error'}`;
+
+            } catch (error) {
+                getResult.textContent = `오류 발생:\n${error.message}`;
+                getResult.className = 'result error';
+            }
+        }
+
+        // 전체 플로우 테스트
+        async function runFullTest() {
+            const fullTestResult = document.getElementById('fullTestResult');
+            fullTestResult.style.display = 'block';
+            fullTestResult.textContent = '전체 API 테스트 시작...\n\n';
+            fullTestResult.className = 'result loading';
+
+            let log = '';
+
+            try {
+                // 1. 로그인 테스트
+                log += '1. 관리자 로그인 테스트...\n';
+                let response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'admin', password: 'admin123' })
+                });
+                let result = await response.json();
+                log += `   결과: ${result.success ? '✅ 성공' : '❌ 실패'} - ${result.message || result.error}\n\n`;
+
+                // 2. 학생 로그인 테스트
+                log += '2. 학생 로그인 테스트...\n';
+                response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'student1', password: 'pass123' })
+                });
+                result = await response.json();
+                log += `   결과: ${result.success ? '✅ 성공' : '❌ 실패'} - ${result.message || result.error}\n\n`;
+
+                // 3. 평가 저장 테스트
+                log += '3. 평가 저장 테스트...\n';
+                response = await fetch('/api/save-evaluation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        evaluatorUsername: 'student1',
+                        peerEvaluations: [{ competency: '의사소통', nominee: 'student2', reason: '테스트' }],
+                        selfEvaluation: { competency: '협동심', reason: '테스트' }
+                    })
+                });
+                result = await response.json();
+                log += `   결과: ${result.success ? '✅ 성공' : '❌ 실패'} - ${result.message || result.error}\n\n`;
+
+                // 4. 평가 조회 테스트
+                log += '4. 평가 조회 테스트...\n';
+                response = await fetch('/api/get-evaluations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targetUsername: 'student1' })
+                });
+                result = await response.json();
+                log += `   결과: ${result.success ? '✅ 성공' : '❌ 실패'} - 조회된 데이터 ${result.count || 0}개\n\n`;
+
+                log += '🎉 전체 테스트 완료!';
+                fullTestResult.className = 'result success';
+
+            } catch (error) {
+                log += `❌ 전체 테스트 중 오류 발생: ${error.message}`;
+                fullTestResult.className = 'result error';
+            }
+
+            fullTestResult.textContent = log;
+        }
+    </script>
+</body>
+</html>

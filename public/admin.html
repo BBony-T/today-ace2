@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 에이스는? - 관리자</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #fff8f0;
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* 좌측 사이드바 */
+        .sidebar {
+            width: 220px;
+            background-color: white;
+            border-right: 3px solid #ffe0b3;
+            padding: 20px;
+            box-shadow: 3px 0 10px rgba(255, 217, 61, 0.1);
+        }
+
+        .sidebar-header {
+            text-align: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #fff5e6;
+        }
+
+        .sidebar-header h2 {
+            color: #2d3748;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .sidebar-header p {
+            color: #4a5568;
+            font-size: 11px;
+        }
+
+        .menu-item {
+            display: block;
+            width: 100%;
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            background-color: #fff5e6;
+            border: 2px solid #ffe0b3;
+            border-radius: 10px;
+            color: #2d3748;
+            text-decoration: none;
+            font-weight: 600;
+            text-align: center;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .menu-item.active {
+            background-color: #ffd93d;
+        }
+
+        .menu-item:hover {
+            background-color: #ffd93d;
+            transform: translateY(-1px);
+        }
+
+        .logout-btn {
+            margin-top: 20px;
+            padding: 8px 12px;
+            background-color: #ffb3b3;
+            border: 2px solid #ff9999;
+            border-radius: 8px;
+            color: #2d3748;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            font-size: 11px;
+        }
+
+        /* 메인 콘텐츠 */
+        .main-content {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .page-header h1 {
+            color: #2d3748;
+            font-size: 26px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .page-header p {
+            color: #4a5568;
+            font-size: 15px;
+        }
+
+        /* 페이지 전환 */
+        .page-content {
+            display: none;
+        }
+
+        .page-content.active {
+            display: block;
+        }
+
+        /* 카드 스타일 */
+        .card {
+            background-color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .card.orange {
+            border: 3px solid #ffe0b3;
+            background-color: #fffbf5;
+        }
+
+        .card.purple {
+            border: 3px solid #e0c4ff;
+            background-color: #faf7ff;
+        }
+
+        .card h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        /* 현황 페이지 스타일 */
+        .class-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .class-selector select,
+        .class-selector input {
+            padding: 8px 12px;
+            border: 2px solid #ffd93d;
+            border-radius: 8px;
+            font-size: 14px;
+            background-color: white;
+        }
+
+        .class-selector button {
+            background-color: #ffd93d;
+            color: #2d3748;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .class-selector button:hover {
+            background-color: #ffb700;
+            transform: translateY(-1px);
+        }
+
+        /* 학생 현황 테이블 */
+        .student-status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .student-card {
+            background-color: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .student-card.completed {
+            border-color: #68d391;
+            background-color: #f0fff4;
+        }
+
+        .student-card.pending {
+            border-color: #fed7af;
+            background-color: #fffaf0;
+        }
+
+        .student-card.not-started {
+            border-color: #feb2b2;
+            background-color: #fef5f5;
+        }
+
+        .student-name {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+
+        .student-status {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            color: white;
+        }
+
+        .status-completed {
+            background-color: #48bb78;
+        }
+
+        .status-pending {
+            background-color: #ed8936;
+        }
+
+        .status-not-started {
+            background-color: #e53e3e;
+        }
+
+        /* 명부 관리 */
+        .roster-management {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .file-upload {
+            border: 2px dashed #ffd93d;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .file-upload:hover {
+            border-color: #ffb700;
+            background-color: #fffbf5;
+        }
+
+        .file-upload input {
+            display: none;
+        }
+
+        /* 통계 페이지 스타일 */
+        .stats-controls {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stats-results {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .student-detail {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .student-header {
+            background-color: #f7fafc;
+            padding: 10px 15px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .student-content {
+            padding: 15px;
+            display: none;
+        }
+
+        .student-content.expanded {
+            display: block;
+        }
+
+        .competency-stat {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .download-btn {
+            background-color: #c77dff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .download-btn:hover {
+            background-color: #a855f7;
+            transform: translateY(-1px);
+        }
+
+        /* 반응형 */
+        @media (max-width: 1000px) {
+            .roster-management {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-controls {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .stats-results {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                padding: 15px;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+            
+            .class-selector {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .stats-controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .student-status-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+        }
+
+        .success-message {
+            background-color: #e6fffa;
+            color: #234e52;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #81e6d9;
+        }
+
+        .activity-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            margin-bottom: 5px;
+            background-color: white;
+            border: 1px solid #ffd93d;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .activity-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .activity-info {
+            flex: 1;
+        }
+
+        .activity-date {
+            color: #c77dff;
+            font-weight: 600;
+        }
+
+        .activity-name {
+            color: #2d3748;
+            margin-left: 10px;
+        }
+
+        .delete-btn {
+            background-color: #e53e3e;
+            color: white;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .error-message {
+            background-color: #ffe6e6;
+            color: #c53030;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #fc8181;
+        }
+    </style>
+</head>
+<body>
+    <!-- 좌측 사이드바 -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>👨‍🏫 관리자 메뉴</h2>
+            <p>선생님, 안녕하세요!</p>
+        </div>
+        
+        <button class="menu-item active" onclick="showPage('status')">📋 현황 페이지</button>
+        <button class="menu-item" onclick="showPage('statistics')">📊 통계 페이지</button>
+        <button class="logout-btn" onclick="logout()">🚪 로그아웃</button>
+    </div>
+
+    <!-- 메인 콘텐츠 -->
+    <div class="main-content">
+        <div class="page-header">
+            <h1>🎯 관리자 대시보드</h1>
+            <p>학생들의 평가 현황과 통계를 관리하세요</p>
+        </div>
+
+        <!-- 현황 페이지 -->
+        <div id="statusPage" class="page-content active">
+            <!-- 클래스 선택 -->
+            <div class="card orange">
+                <h3>🏫 클래스 관리</h3>
+                <div class="class-selector">
+                    <select id="yearSelect">
+                        <option value="2024">2024년</option>
+                        <option value="2025" selected>2025년</option>
+                        <option value="2026">2026년</option>
+                    </select>
+                    <select id="subjectSelect">
+                        <option value="">과목 선택</option>
+                        <option value="국어">국어</option>
+                        <option value="수학">수학</option>
+                        <option value="영어">영어</option>
+                        <option value="과학">과학</option>
+                        <option value="사회">사회</option>
+                        <option value="창체">창체</option>
+                    </select>
+                    <select id="clubSelect">
+                        <option value="">동아리 선택</option>
+                        <option value="코딩클럽">코딩클럽</option>
+                        <option value="독서토론">독서토론</option>
+                        <option value="과학실험">과학실험</option>
+                        <option value="미술반">미술반</option>
+                    </select>
+                    <button onclick="loadStudentStatus()">조회</button>
+                    <button onclick="showRosterModal()" style="background-color: #c77dff; color: white;">명부 관리</button>
+                    <button onclick="generateTestData()" style="background-color: #48bb78; color: white;">테스트 데이터 생성</button>
+                </div>
+                <div id="classInfo" style="text-align: center; color: #666; margin-bottom: 15px;"></div>
+            </div>
+
+            <!-- 학생 현황판 -->
+            <div class="card purple">
+                <h3>👥 학생 현황판</h3>
+                <div id="studentStatusGrid" class="student-status-grid">
+                    <div style="grid-column: 1/-1; text-align: center; color: #666; padding: 20px;">
+                        클래스를 선택하고 조회 버튼을 눌러주세요.
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 15px;">
+                    <span style="margin-right: 20px;">
+                        <span class="student-status status-completed">완료</span> 
+                        <span style="margin-left: 5px; font-size: 14px;" id="completedCount">0명</span>
+                    </span>
+                    <span style="margin-right: 20px;">
+                        <span class="student-status status-pending">부분완료</span>
+                        <span style="margin-left: 5px; font-size: 14px;" id="pendingCount">0명</span>
+                    </span>
+                    <span>
+                        <span class="student-status status-not-started">미시작</span>
+                        <span style="margin-left: 5px; font-size: 14px;" id="notStartedCount">0명</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 통계 페이지 -->
+        <div id="statisticsPage" class="page-content">
+            <!-- 통계 조회 컨트롤 -->
+            <div class="card orange">
+                <h3>📈 통계 조회</h3>
+                <div class="stats-controls">
+                    <select id="statsYear">
+                        <option value="2024">2024년</option>
+                        <option value="2025" selected>2025년</option>
+                    </select>
+                    <select id="statsSubject">
+                        <option value="">전체 과목</option>
+                        <option value="국어">국어</option>
+                        <option value="수학">수학</option>
+                        <option value="영어">영어</option>
+                    </select>
+                    <select id="statsClub">
+                        <option value="">전체 동아리</option>
+                        <option value="코딩클럽">코딩클럽</option>
+                        <option value="독서토론">독서토론</option>
+                    </select>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="date" id="startDate" style="padding: 8px; border: 2px solid #c77dff; border-radius: 8px;">
+                        <span>~</span>
+                        <input type="date" id="endDate" style="padding: 8px; border: 2px solid #c77dff; border-radius: 8px;">
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 10px;">
+                    <button onclick="loadStatistics()" style="background-color: #c77dff; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600;">
+                        통계 조회
+                    </button>
+                </div>
+            </div>
+
+            <!-- 통계 결과 -->
+            <div class="stats-results">
+                <div class="card purple">
+                    <h3>📊 개인별 통계</h3>
+                    <div style="margin-bottom: 15px; text-align: right;">
+                        <button class="download-btn" onclick="downloadExcel()">📥 엑셀 다운로드</button>
+                    </div>
+                    <div id="statisticsResults">
+                        <div style="text-align: center; color: #666; padding: 20px;">
+                            통계 조회 버튼을 눌러주세요.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card orange">
+                    <h3>📈 전체 요약</h3>
+                    <div id="summaryStats">
+                        <div style="text-align: center; color: #666; padding: 20px;">
+                            통계 데이터를 불러오는 중...
+                        </div>
+                    </div>
+                    
+                    <!-- 활동 정보 입력 및 목록 -->
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #fff5e6;">
+                        <h4 style="text-align: center; margin-bottom: 15px; color: #2d3748;">📝 활동 정보 관리</h4>
+                        
+                        <!-- 입력 폼 -->
+                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                            <input type="date" id="activityDate" placeholder="활동 날짜" 
+                                   style="flex: 1; padding: 8px; border: 2px solid #ffd93d; border-radius: 8px;">
+                            <input type="text" id="activityName" placeholder="활동명 (예: 모둠 토론)" 
+                                   style="flex: 2; padding: 8px; border: 2px solid #ffd93d; border-radius: 8px;">
+                            <button onclick="addActivityInfo()" 
+                                    style="background-color: #ffd93d; color: #2d3748; border: none; padding: 8px 15px; border-radius: 8px; font-weight: 600; white-space: nowrap;">
+                                추가
+                            </button>
+                        </div>
+                        
+                        <!-- 활동 목록 -->
+                        <div id="activityList" style="max-height: 150px; overflow-y: auto;">
+                            <!-- 여기에 활동 목록이 표시됩니다 -->
+                        </div>
+                        
+                        <!-- 전체 삭제 버튼 -->
+                        <div style="text-align: center; margin-top: 10px;">
+                            <button onclick="clearAllActivities()" 
+                                    style="background-color: #e53e3e; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px;">
+                                전체 삭제
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 명부 관리 모달 (간단한 구현) -->
+    <div id="rosterModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%;">
+            <h3 style="margin-bottom: 20px; text-align: center;">📋 명부 관리</h3>
+            
+            <div class="file-upload" onclick="document.getElementById('csvFile').click()">
+                <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event)">
+                <div>📁 CSV 또는 Excel 파일을 선택하세요</div>
+                <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                    형식: 이름, 학번, 클래스 순으로 작성
+                </div>
+            </div>
+            
+            <div style="margin: 20px 0; text-align: center;">
+                <button onclick="clearAllData()" style="background-color: #e53e3e; color: white; border: none; padding: 8px 15px; border-radius: 8px; margin-right: 10px;">
+                    🗑️ 전체 초기화
+                </button>
+                <button onclick="closeRosterModal()" style="background-color: #4a5568; color: white; border: none; padding: 8px 15px; border-radius: 8px;">
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStudentData = [];
+        let currentStatsData = [];
+
+        // 페이지 전환
+        function showPage(pageType) {
+            // 메뉴 활성화 상태 변경
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // 페이지 내용 전환
+            document.querySelectorAll('.page-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            if (pageType === 'status') {
+                document.getElementById('statusPage').classList.add('active');
+                loadStudentStatus();
+            } else if (pageType === 'statistics') {
+                document.getElementById('statisticsPage').classList.add('active');
+                loadStatistics();
+            }
+        }
+
+        // 학생 현황 로드
+        function loadStudentStatus() {
+            const year = document.getElementById('yearSelect').value;
+            const subject = document.getElementById('subjectSelect').value;
+            const club = document.getElementById('clubSelect').value;
+
+            // 실제 데이터가 있으면 실제 데이터 사용, 없으면 더미 데이터 사용
+            const actualData = getActualStudentStatus();
+            const studentData = actualData.length > 0 ? actualData : generateDummyStudents();
+            
+            currentStudentData = studentData;
+
+            displayStudentStatus(studentData);
+            updateClassInfo(year, subject, club);
+        }
+
+        // 더미 학생 데이터 생성 (실제 저장 데이터 기반)
+        function generateDummyStudents() {
+            const names = ['김민수', '이영희', '박철수', '정미영', '최준호', '한소영', '오현우', '장유진', '임재혁', '윤서연', 
+                          '강동현', '송민지', '이서준', '박지영', '김도윤', '최서현', '정민성', '한예린', '오승환', '장다은'];
+            
+            return names.map((name, index) => {
+                // 저장 데이터 시뮬레이션
+                const hasPeerEvaluation = Math.random() > 0.3; // 70% 확률로 동료평가 있음
+                const hasSelfEvaluation = Math.random() > 0.4; // 60% 확률로 자기평가 있음
+                
+                let status;
+                if (hasPeerEvaluation && hasSelfEvaluation) {
+                    status = 'completed'; // 둘 다 완료
+                } else if (hasPeerEvaluation || hasSelfEvaluation) {
+                    status = 'pending'; // 하나만 완료
+                } else {
+                    status = 'not-started'; // 둘 다 미완료
+                }
+                
+                return {
+                    name: name,
+                    studentId: `2025${String(index + 1).padStart(2, '0')}`,
+                    status: status,
+                    hasPeerEvaluation: hasPeerEvaluation,
+                    hasSelfEvaluation: hasSelfEvaluation,
+                    lastUpdate: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                };
+            });
+        }
+
+        // 실제 localStorage 데이터로 학생 현황 확인하는 함수 (실제 구현용)
+        function getActualStudentStatus() {
+            try {
+                const evaluationHistory = JSON.parse(localStorage.getItem('evaluationHistory') || '[]');
+                const roster = JSON.parse(localStorage.getItem('classRoster') || '[]');
+                
+                // 현재 선택된 클래스 정보
+                const currentYear = document.getElementById('yearSelect').value;
+                const currentSubject = document.getElementById('subjectSelect').value;
+                const currentClub = document.getElementById('clubSelect').value;
+                
+                // 해당 클래스 학생들 필터링
+                const classStudents = roster.filter(student => 
+                    student.year === currentYear &&
+                    (!currentSubject || student.subject === currentSubject) &&
+                    (!currentClub || student.club === currentClub)
+                );
+                
+                return classStudents.map(student => {
+                    // 해당 학생의 평가 데이터 찾기
+                    const studentEvaluations = evaluationHistory.filter(eval => 
+                        eval.student === student.name
+                    );
+                    
+                    let hasPeerEvaluation = false;
+                    let hasSelfEvaluation = false;
+                    let lastUpdate = null;
+                    
+                    studentEvaluations.forEach(evaluation => {
+                        if (evaluation.peerEvaluations && evaluation.peerEvaluations.length > 0) {
+                            hasPeerEvaluation = true;
+                        }
+                        if (evaluation.selfEvaluation) {
+                            hasSelfEvaluation = true;
+                        }
+                        if (!lastUpdate || evaluation.date > lastUpdate) {
+                            lastUpdate = evaluation.date;
+                        }
+                    });
+                    
+                    // 완료도 결정
+                    let status;
+                    if (hasPeerEvaluation && hasSelfEvaluation) {
+                        status = 'completed'; // 둘 다 완료
+                    } else if (hasPeerEvaluation || hasSelfEvaluation) {
+                        status = 'pending'; // 하나만 완료  
+                    } else {
+                        status = 'not-started'; // 둘 다 미완료
+                    }
+                    
+                    return {
+                        name: student.name,
+                        studentId: student.studentId,
+                        status: status,
+                        hasPeerEvaluation: hasPeerEvaluation,
+                        hasSelfEvaluation: hasSelfEvaluation,
+                        lastUpdate: lastUpdate || '미참여'
+                    };
+                });
+                
+            } catch (error) {
+                console.error('데이터 로드 오류:', error);
+                return [];
+            }
+        }
+
+        // 학생 현황 표시
+        function displayStudentStatus(students) {
+            const grid = document.getElementById('studentStatusGrid');
+            const statusCounts = { completed: 0, pending: 0, 'not-started': 0 };
+
+            if (students.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; color: #666; padding: 20px;">
+                        해당 클래스에 등록된 학생이 없습니다.<br>
+                        명부 관리에서 학생을 등록해주세요.
+                    </div>
+                `;
+                document.getElementById('completedCount').textContent = '0명';
+                document.getElementById('pendingCount').textContent = '0명';
+                document.getElementById('notStartedCount').textContent = '0명';
+                return;
+            }
+
+            grid.innerHTML = students.map(student => {
+                statusCounts[student.status]++;
+                
+                const statusText = {
+                    completed: '완료',
+                    pending: '부분완료', 
+                    'not-started': '미시작'
+                };
+
+                const detailText = {
+                    completed: '동료평가 ✓ 자기평가 ✓',
+                    pending: student.hasPeerEvaluation && !student.hasSelfEvaluation ? '동료평가 ✓ 자기평가 ✗' :
+                            !student.hasPeerEvaluation && student.hasSelfEvaluation ? '동료평가 ✗ 자기평가 ✓' :
+                            '동료평가 ✓ 자기평가 ✗',
+                    'not-started': '동료평가 ✗ 자기평가 ✗'
+                };
+
+                return `
+                    <div class="student-card ${student.status}" title="${detailText[student.status]}">
+                        <div class="student-name">${student.name}</div>
+                        <div class="student-status status-${student.status}">
+                            ${statusText[student.status]}
+                        </div>
+                        <div style="font-size: 10px; color: #666; margin-top: 5px;">
+                            ${student.lastUpdate}
+                        </div>
+                        <div style="font-size: 9px; color: #999; margin-top: 2px;">
+                            ${detailText[student.status]}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // 카운트 업데이트
+            document.getElementById('completedCount').textContent = statusCounts.completed + '명';
+            document.getElementById('pendingCount').textContent = statusCounts.pending + '명';
+            document.getElementById('notStartedCount').textContent = statusCounts['not-started'] + '명';
+        }
+
+        // 클래스 정보 업데이트
+        function updateClassInfo(year, subject, club) {
+            const parts = [];
+            if (year) parts.push(`${year}년`);
+            if (subject) parts.push(subject);
+            if (club) parts.push(club);
+            
+            const info = parts.length > 0 ? parts.join(' > ') : '전체';
+            document.getElementById('classInfo').textContent = `현재 조회: ${info}`;
+        }
+
+        // 통계 로드
+        function loadStatistics() {
+            const year = document.getElementById('statsYear').value;
+            const subject = document.getElementById('statsSubject').value;
+            const club = document.getElementById('statsClub').value;
+
+            // 더미 통계 데이터 생성
+            const dummyStats = generateDummyStatistics();
+            currentStatsData = dummyStats;
+
+            displayStatistics(dummyStats);
+            displaySummaryStats(dummyStats);
+        }
+
+        // 더미 통계 데이터 생성
+        function generateDummyStatistics() {
+            const students = ['김민수', '이영희', '박철수', '정미영', '최준호', '한소영', '오현우', '장유진'];
+            const competencies = ['자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
+            const activities = ['모둠 토론', '프로젝트 발표', '역할극 활동', '창의적 글쓰기', '실험 활동', '토의 수업'];
+
+            return students.map(name => {
+                const stats = {};
+                competencies.forEach(comp => {
+                    const evaluations = [];
+                    const count = Math.floor(Math.random() * 5);
+                    
+                    for (let i = 0; i < count; i++) {
+                        evaluations.push({
+                            date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                            activity: activities[Math.floor(Math.random() * activities.length)],
+                            reason: ['적극적인 자세', '뛰어난 통찰력', '창의적 사고', '배려심', '명확한 의사전달', '뛰어난 팀워크'][Math.floor(Math.random() * 6)]
+                        });
+                    }
+                    
+                    stats[comp] = {
+                        count: count,
+                        evaluations: evaluations
+                    };
+                });
+                return { name, stats };
+            });
+        }
+
+        // 통계 결과 표시
+        function displayStatistics(statsData) {
+            const container = document.getElementById('statisticsResults');
+            
+            container.innerHTML = statsData.map(student => `
+                <div class="student-detail">
+                    <div class="student-header" onclick="toggleStudentDetail(this)">
+                        <span><strong>${student.name}</strong></span>
+                        <span>▼</span>
+                    </div>
+                    <div class="student-content">
+                        ${Object.entries(student.stats).map(([competency, data]) => `
+                            <div class="competency-stat">
+                                <span>${competency}</span>
+                                <span><strong>${data.count}회</strong></span>
+                            </div>
+                            ${data.evaluations.length > 0 ? `
+                                <div style="margin-left: 15px; margin-bottom: 15px;">
+                                    ${data.evaluations.map(eval => `
+                                        <div style="font-size: 12px; color: #666; margin-bottom: 8px; padding: 8px; background-color: #f8f9fa; border-radius: 5px; border-left: 3px solid #c77dff;">
+                                            <div><strong>📅 ${eval.date}</strong> | <strong>📋 ${eval.activity}</strong></div>
+                                            <div style="margin-top: 3px;">💬 ${eval.reason}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 요약 통계 표시
+        function displaySummaryStats(statsData) {
+            const container = document.getElementById('summaryStats');
+            const totalStudents = statsData.length;
+            const competencies = ['자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
+            
+            // 각 역량별로 가장 많이 추천받은 학생 찾기
+            const topStudentsByCompetency = {};
+            competencies.forEach(comp => {
+                let maxCount = 0;
+                let topStudent = '없음';
+                
+                statsData.forEach(student => {
+                    if (student.stats[comp].count > maxCount) {
+                        maxCount = student.stats[comp].count;
+                        topStudent = student.name;
+                    }
+                });
+                
+                topStudentsByCompetency[comp] = {
+                    name: topStudent,
+                    count: maxCount
+                };
+            });
+
+            container.innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #2d3748; text-align: center;">
+                        ${totalStudents}명
+                    </div>
+                    <div style="text-align: center; color: #666;">참여 학생 수</div>
+                </div>
+                
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; font-size: 13px;">
+                    <h4 style="margin-bottom: 10px; color: #2d3748;">🏆 역량별 최고 추천자</h4>
+                    ${Object.entries(topStudentsByCompetency).map(([comp, data]) => 
+                        `<div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding: 5px; background-color: white; border-radius: 5px;">
+                            <span style="font-size: 12px;">${comp}:</span>
+                            <span style="font-weight: bold; color: #c77dff;">${data.name} (${data.count}회)</span>
+                        </div>`
+                    ).join('')}
+                </div>
+            `;
+        }
+
+        // 학생 상세 정보 토글
+        function toggleStudentDetail(header) {
+            const content = header.nextElementSibling;
+            const arrow = header.querySelector('span:last-child');
+            
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                arrow.textContent = '▼';
+            } else {
+                content.classList.add('expanded');
+                arrow.textContent = '▲';
+            }
+        }
+
+        // 엑셀 다운로드
+        function downloadExcel() {
+            if (currentStatsData.length === 0) {
+                alert('다운로드할 데이터가 없습니다. 먼저 통계를 조회해주세요.');
+                return;
+            }
+
+            const workbook = XLSX.utils.book_new();
+            const worksheetData = [];
+            
+            // 헤더 생성
+            const headers = ['학생명', '자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
+            worksheetData.push(headers);
+            
+            // 데이터 추가
+            currentStatsData.forEach(student => {
+                const row = [student.name];
+                const competencies = ['자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
+                competencies.forEach(comp => {
+                    row.push(student.stats[comp].count);
+                });
+                worksheetData.push(row);
+            });
+
+            // 상세 평가 시트 생성
+            const detailData = [];
+            detailData.push(['학생명', '역량', '날짜', '활동명', '추천 이유']);
+            
+            currentStatsData.forEach(student => {
+                Object.entries(student.stats).forEach(([competency, data]) => {
+                    if (data.evaluations.length > 0) {
+                        data.evaluations.forEach(evaluation => {
+                            detailData.push([
+                                student.name, 
+                                competency, 
+                                evaluation.date,
+                                evaluation.activity,
+                                evaluation.reason
+                            ]);
+                        });
+                    }
+                });
+            });
+
+            // 워크시트 생성
+            const worksheet1 = XLSX.utils.aoa_to_sheet(worksheetData);
+            const worksheet2 = XLSX.utils.aoa_to_sheet(detailData);
+            
+            XLSX.utils.book_append_sheet(workbook, worksheet1, '역량별 통계');
+            XLSX.utils.book_append_sheet(workbook, worksheet2, '상세 평가 내역');
+
+            // 파일 다운로드
+            const today = new Date().toISOString().split('T')[0];
+            const startDate = document.getElementById('startDate').value || '전체';
+            const endDate = document.getElementById('endDate').value || '기간';
+            XLSX.writeFile(workbook, `에이스_통계_${startDate}_${endDate}_${today}.xlsx`);
+            
+            showMessage('엑셀 파일이 다운로드되었습니다! 📥', 'success');
+        }
+
+        // 활동 정보 추가
+        function addActivityInfo() {
+            const date = document.getElementById('activityDate').value;
+            const name = document.getElementById('activityName').value.trim();
+            
+            if (!date || !name) {
+                showMessage('날짜와 활동명을 모두 입력해주세요.', 'error');
+                return;
+            }
+            
+            // localStorage에 활동 정보 저장
+            const activityInfo = { 
+                id: Date.now(),
+                date: date, 
+                name: name, 
+                timestamp: new Date().toISOString() 
+            };
+            
+            const activities = JSON.parse(localStorage.getItem('activityHistory') || '[]');
+            activities.push(activityInfo);
+            localStorage.setItem('activityHistory', JSON.stringify(activities));
+            
+            showMessage(`활동이 추가되었습니다: ${date} - ${name} 🎯`, 'success');
+            
+            // 입력 필드 초기화
+            document.getElementById('activityDate').value = '';
+            document.getElementById('activityName').value = '';
+            
+            // 활동 목록 새로고침
+            loadActivityList();
+        }
+
+        // 활동 목록 로드
+        function loadActivityList() {
+            const activities = JSON.parse(localStorage.getItem('activityHistory') || '[]');
+            const container = document.getElementById('activityList');
+            
+            if (activities.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: #666; padding: 15px; font-size: 12px;">
+                        등록된 활동이 없습니다.
+                    </div>
+                `;
+                return;
+            }
+            
+            // 날짜순으로 정렬 (최신순)
+            activities.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            container.innerHTML = activities.map(activity => `
+                <div class="activity-item">
+                    <div class="activity-info">
+                        <span class="activity-date">📅 ${activity.date}</span>
+                        <span class="activity-name">📋 ${activity.name}</span>
+                    </div>
+                    <button class="delete-btn" onclick="removeActivity(${activity.id})">삭제</button>
+                </div>
+            `).join('');
+        }
+
+        // 개별 활동 삭제
+        function removeActivity(activityId) {
+            if (confirm('이 활동을 삭제하시겠습니까?')) {
+                const activities = JSON.parse(localStorage.getItem('activityHistory') || '[]');
+                const updatedActivities = activities.filter(activity => activity.id !== activityId);
+                localStorage.setItem('activityHistory', JSON.stringify(updatedActivities));
+                
+                showMessage('활동이 삭제되었습니다.', 'success');
+                loadActivityList();
+            }
+        }
+
+        // 전체 활동 삭제
+        function clearAllActivities() {
+            if (confirm('모든 활동 정보를 삭제하시겠습니까?')) {
+                localStorage.removeItem('activityHistory');
+                showMessage('모든 활동이 삭제되었습니다.', 'success');
+                loadActivityList();
+            }
+        }
+
+        // 명부 관리 모달
+        function showRosterModal() {
+            document.getElementById('rosterModal').style.display = 'flex';
+        }
+
+        function closeRosterModal() {
+            document.getElementById('rosterModal').style.display = 'none';
+        }
+
+        // 파일 업로드 처리
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    let data;
+                    if (file.name.endsWith('.csv')) {
+                        // CSV 파일 처리
+                        const text = e.target.result;
+                        data = parseCSV(text);
+                    } else {
+                        // Excel 파일 처리
+                        const workbook = XLSX.read(e.target.result, { type: 'binary' });
+                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                        data = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                    }
+                    
+                    processRosterData(data);
+                    showMessage('명부가 성공적으로 업로드되었습니다! 👥', 'success');
+                    closeRosterModal();
+                    
+                } catch (error) {
+                    console.error('파일 처리 오류:', error);
+                    showMessage('파일 형식이 올바르지 않습니다. 다시 시도해주세요.', 'error');
+                }
+            };
+
+            if (file.name.endsWith('.csv')) {
+                reader.readAsText(file, 'utf-8');
+            } else {
+                reader.readAsBinaryString(file);
+            }
+        }
+
+        // CSV 파싱
+        function parseCSV(text) {
+            const lines = text.split('\n');
+            return lines.map(line => line.split(',').map(cell => cell.trim()));
+        }
+
+        // 명부 데이터 처리
+        function processRosterData(data) {
+            // 헤더 제거
+            if (data.length > 0) {
+                data.shift();
+            }
+
+            const roster = data.filter(row => row.length >= 2 && row[0] && row[1]).map(row => ({
+                name: row[0].trim(),
+                studentId: row[1].trim(),
+                class: row[2] ? row[2].trim() : '',
+                year: document.getElementById('yearSelect').value,
+                subject: document.getElementById('subjectSelect').value,
+                club: document.getElementById('clubSelect').value
+            }));
+
+            // localStorage에 저장
+            const existingRoster = JSON.parse(localStorage.getItem('classRoster') || '[]');
+            const updatedRoster = [...existingRoster, ...roster];
+            localStorage.setItem('classRoster', JSON.stringify(updatedRoster));
+            
+            console.log('업로드된 명부:', roster);
+        }
+
+        // 테스트 데이터 생성
+        function generateTestData() {
+            if (confirm('테스트용 평가 데이터를 생성하시겠습니까?\n(기존 데이터에 추가됩니다)')) {
+                const testStudents = ['김민수', '이영희', '박철수', '정미영', '최준호', '한소영'];
+                const competencies = ['자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
+                const reasons = ['적극적인 참여', '뛰어난 분석력', '창의적 아이디어', '배려심', '명확한 의사전달', '팀워크'];
+                
+                const existingData = JSON.parse(localStorage.getItem('evaluationHistory') || '[]');
+                
+                testStudents.forEach((studentName, index) => {
+                    const rand = Math.random();
+                    let peerEvaluations = [];
+                    let selfEvaluation = null;
+                    
+                    // 33% - 완료 (둘 다), 33% - 동료평가만, 34% - 자기평가만
+                    if (rand < 0.33) {
+                        // 완료: 둘 다 작성
+                        peerEvaluations = [
+                            {
+                                competency: competencies[index % 6],
+                                name: testStudents[(index + 1) % testStudents.length],
+                                reason: reasons[index % 6]
+                            }
+                        ];
+                        selfEvaluation = {
+                            competency: competencies[(index + 2) % 6],
+                            reason: `${studentName}의 자기평가 이유`
+                        };
+                    } else if (rand < 0.66) {
+                        // 부분완료: 동료평가만
+                        peerEvaluations = [
+                            {
+                                competency: competencies[index % 6],
+                                name: testStudents[(index + 1) % testStudents.length],
+                                reason: reasons[index % 6]
+                            }
+                        ];
+                    } else {
+                        // 부분완료: 자기평가만
+                        selfEvaluation = {
+                            competency: competencies[(index + 2) % 6],
+                            reason: `${studentName}의 자기평가 이유`
+                        };
+                    }
+                    
+                    const testData = {
+                        id: Date.now() + index,
+                        date: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                        timestamp: new Date().toISOString(),
+                        student: studentName,
+                        peerEvaluations: peerEvaluations,
+                        selfEvaluation: selfEvaluation
+                    };
+                    
+                    existingData.push(testData);
+                });
+                
+                localStorage.setItem('evaluationHistory', JSON.stringify(existingData));
+                
+                // 테스트용 명부도 생성
+                const testRoster = testStudents.map((name, index) => ({
+                    name: name,
+                    studentId: `2025${String(index + 1).padStart(2, '0')}`,
+                    class: '1반',
+                    year: '2025',
+                    subject: document.getElementById('subjectSelect').value || '국어',
+                    club: document.getElementById('clubSelect').value || '코딩클럽'
+                }));
+                
+                const existingRoster = JSON.parse(localStorage.getItem('classRoster') || '[]');
+                localStorage.setItem('classRoster', JSON.stringify([...existingRoster, ...testRoster]));
+                
+                showMessage('테스트 데이터가 생성되었습니다! 이제 조회 버튼을 눌러보세요. 🎉', 'success');
+                loadStudentStatus();
+            }
+        }
+        function clearAllData() {
+            if (confirm('정말로 모든 데이터를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
+                localStorage.clear();
+                showMessage('모든 데이터가 초기화되었습니다.', 'success');
+                closeRosterModal();
+                loadStudentStatus();
+            }
+        }
+
+        // 로그아웃
+        function logout() {
+            if (confirm('정말로 로그아웃하시겠습니까?')) {
+                window.location.href = 'login.html';
+            }
+        }
+
+        // 메시지 표시
+        function showMessage(message, type) {
+            // 기존 메시지 제거
+            const existingMessage = document.querySelector('.success-message, .error-message');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+
+            // 새 메시지 생성
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type === 'success' ? 'success-message' : 'error-message';
+            messageDiv.textContent = message;
+            
+            // 현재 활성 페이지의 첫 번째 카드 앞에 추가
+            const activePageContent = document.querySelector('.page-content.active');
+            const firstCard = activePageContent.querySelector('.card');
+            activePageContent.insertBefore(messageDiv, firstCard);
+            
+            // 3초 후 제거
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 3000);
+        }
+
+        // 페이지 로드 시 실행
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStudentStatus();
+            loadActivityList();
+        });
+    </script>
+</body>
+</html>

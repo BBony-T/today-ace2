@@ -1,0 +1,397 @@
+<!-- 배포 테스트 2025-08-25 --!!>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 에이스는?</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #fff8f0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: -50px;
+            left: -50px;
+            width: 150px;
+            height: 150px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20 50 L35 25 L65 25 L80 50 L65 75 L35 75 Z" fill="%23ffd93d" stroke="none"/></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+            opacity: 0.6;
+            z-index: 0;
+        }
+
+        body::after {
+            content: '';
+            position: absolute;
+            bottom: -30px;
+            right: -30px;
+            width: 120px;
+            height: 120px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 10 C70 20, 90 40, 80 60 C70 80, 30 80, 20 60 C10 40, 30 20, 50 10 Z" fill="%23c77dff" stroke="none"/></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+            opacity: 0.5;
+            z-index: 0;
+        }
+
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 25px;
+            box-shadow: 0 20px 40px rgba(255, 217, 61, 0.2);
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+            border: 3px solid #ffe0b3;
+        }
+
+        .logo {
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            color: #2d3748;
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .logo p {
+            color: #4a5568;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            color: #2d3748;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ffd93d;
+            border-radius: 15px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #fffef7;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #ffb700;
+            box-shadow: 0 0 0 3px rgba(255, 217, 61, 0.2);
+            background: white;
+        }
+
+        .login-button {
+            width: 100%;
+            background-color: #ffd93d;
+            color: #2d3748;
+            border: none;
+            padding: 16px;
+            border-radius: 15px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(255, 217, 61, 0.4);
+            background-color: #ffb700;
+        }
+
+        .login-button:active {
+            transform: translateY(0);
+        }
+
+        .login-button:disabled {
+            background-color: #e2e8f0;
+            color: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .demo-accounts {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #fff5e6;
+            border-radius: 15px;
+            text-align: left;
+            border: 2px solid #ffe0b3;
+        }
+
+        .demo-accounts h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .demo-account {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #4a5568;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .demo-account:hover {
+            background-color: #ffd93d;
+            transform: translateX(5px);
+            color: #2d3748;
+        }
+
+        .demo-account:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .success {
+            background-color: #e6fffa;
+            color: #234e52;
+            border: 2px solid #81e6d9;
+        }
+
+        .error {
+            background-color: #ffe6e6;
+            color: #c53030;
+            border: 2px solid #fc8181;
+        }
+
+        .test-section {
+            background-color: #f0f8ff;
+            border: 2px solid #4169e1;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 10px;
+        }
+
+        .test-button {
+            background-color: #4169e1;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <h1>🌟 오늘의 에이스는?</h1>
+            <p>따뜻한 마음으로 함께 성장해요!</p>
+        </div>
+
+        <form id="loginForm">
+            <div class="input-group">
+                <label for="username">아이디</label>
+                <input type="text" id="username" name="username" placeholder="아이디를 입력하세요" required>
+            </div>
+
+            <div class="input-group">
+                <label for="password">비밀번호</label>
+                <input type="password" id="password" name="password" placeholder="비밀번호를 입력하세요" required>
+            </div>
+
+            <button type="submit" class="login-button">로그인</button>
+        </form>
+
+        <div class="status-message" id="errorMessage"></div>
+
+        <!-- 데모용 계정 정보 -->
+        <div class="demo-accounts">
+            <h3>📝 데모 계정</h3>
+            <div class="demo-account" data-username="student1" data-password="pass123">
+                <span><strong>학생:</strong> student1</span>
+                <span>pass123</span>
+            </div>
+            <div class="demo-account" data-username="admin" data-password="admin123">
+                <span><strong>관리자:</strong> admin</span>
+                <span>admin123</span>
+            </div>
+        </div>
+
+        <!-- 테스트 섹션 -->
+        <div class="test-section">
+            <h3>🧪 연결 테스트</h3>
+            <button type="button" class="test-button" onclick="testBasic()">기본 테스트</button>
+            <button type="button" class="test-button" onclick="testFirebase()">Firebase 테스트</button>
+            <div id="testResult" style="margin-top: 10px; font-size: 12px;"></div>
+        </div>
+    </div>
+
+    <!-- 기본 JavaScript 테스트 -->
+    <script>
+        console.log('📝 페이지 로드됨');
+        
+        // 페이지 로드 즉시 실행
+        alert('🎉 기본 JavaScript 작동 중!');
+
+        // 페이지 로드 시 실행
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📝 DOM 로드 완료');
+            
+            const loginForm = document.getElementById('loginForm');
+            loginForm.addEventListener('submit', handleLogin);
+
+            // 데모 계정 클릭 이벤트
+            document.querySelectorAll('.demo-account').forEach(account => {
+                account.addEventListener('click', function() {
+                    const username = this.getAttribute('data-username');
+                    const password = this.getAttribute('data-password');
+                    document.getElementById('username').value = username;
+                    document.getElementById('password').value = password;
+                });
+            });
+        });
+
+        // 기본 테스트 함수
+        function testBasic() {
+            alert('✅ 기본 JavaScript 함수 작동!');
+            document.getElementById('testResult').innerHTML = '✅ 기본 테스트 성공<br>시간: ' + new Date().toLocaleTimeString();
+        }
+
+        // Firebase 테스트 함수
+        function testFirebase() {
+            if (typeof firebase !== 'undefined') {
+                alert('✅ Firebase 연결됨!');
+                document.getElementById('testResult').innerHTML = '✅ Firebase 연결 성공';
+            } else {
+                alert('❌ Firebase 연결 안됨');
+                document.getElementById('testResult').innerHTML = '❌ Firebase 연결 실패';
+            }
+        }
+
+        // 로그인 처리 함수
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            if (!username || !password) {
+                showError('아이디와 비밀번호를 입력해주세요.');
+                return;
+            }
+
+            try {
+                showLoading();
+
+                // 관리자 계정 확인
+                if (username === 'admin' && password === 'admin123') {
+                    sessionStorage.setItem('userType', 'admin');
+                    sessionStorage.setItem('username', username);
+                    showSuccess('관리자로 로그인되었습니다!');
+                    setTimeout(() => {
+                        window.location.href = 'admin.html';
+                    }, 1000);
+                    return;
+                }
+
+                // 테스트용 학생 계정들
+                const testStudents = {
+                    'student1': { name: '김학생', class: '1반', grade: '3학년' },
+                    'student2': { name: '이학생', class: '1반', grade: '3학년' },
+                    'student3': { name: '박학생', class: '2반', grade: '3학년' }
+                };
+
+                if (testStudents[username] && password === 'pass123') {
+                    sessionStorage.setItem('userType', 'student');
+                    sessionStorage.setItem('username', username);
+                    sessionStorage.setItem('studentInfo', JSON.stringify(testStudents[username]));
+                    showSuccess('학생으로 로그인되었습니다!');
+                    setTimeout(() => {
+                        window.location.href = 'student.html';
+                    }, 1000);
+                    return;
+                }
+
+                showError('아이디 또는 비밀번호가 잘못되었습니다.');
+
+            } catch (error) {
+                console.error('로그인 오류:', error);
+                showError('로그인 중 오류가 발생했습니다.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.className = 'status-message error';
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        function showSuccess(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.className = 'status-message success';
+            errorDiv.style.display = 'block';
+        }
+
+        function showLoading() {
+            const button = document.querySelector('.login-button');
+            button.disabled = true;
+            button.textContent = '로그인 중...';
+        }
+
+        function hideLoading() {
+            const button = document.querySelector('.login-button');
+            button.disabled = false;
+            button.textContent = '로그인';
+        }
+    </script>
+</body>
+</html>
+
+
