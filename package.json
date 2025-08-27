@@ -2,15 +2,19 @@
   "name": "today-ace",
   "version": "1.0.0",
   "description": "오늘의 에이스는? - 동료평가/자기평가 웹사이트",
-  "main": "index.html",
+  "type": "module",
+  "engines": { "node": ">=18" },
   "scripts": {
-    "build": "echo 'Static site - no build needed'",
-    "start": "echo 'Static site deployed'",
-    "dev": "echo 'Development mode'"
+    "build": "",
+    "start": "",
+    "dev": ""
+  },
+  "dependencies": {
+    "firebase-admin": "^12.5.0"
   },
   "keywords": [
     "education",
-    "peer-evaluation", 
+    "peer-evaluation",
     "self-assessment",
     "static-site"
   ],
@@ -18,13 +22,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/BBony-T/today-ace2.git"
+    "url": "https://github.com/BBony-T/today-ace.git"
   }
-
 }
-{
-  "type": "module",
-  "engines": { "node": ">=18" },
-  "dependencies": { "firebase-admin": "^12.5.0" }
-}
-
