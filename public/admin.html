@@ -791,125 +791,263 @@
             document.getElementById('classInfo').textContent = `현재 조회: ${info}`;
         }
 
-        // 통계 로드
-        function loadStatistics() {
-            const year = document.getElementById('statsYear').value;
-            const subject = document.getElementById('statsSubject').value;
-            const club = document.getElementById('statsClub').value;
+        // 통계 로드, loadstatics 삭
+        
+        // 더미 통계 데이터 생성 함수 generatedummy~ 삭제
+        
+        // 통계 결과 표시displayStatistics 삭제
 
-            // 더미 통계 데이터 생성
-            const dummyStats = generateDummyStatistics();
-            currentStatsData = dummyStats;
+        // 요약 통계 표시displaySummaryStats삭제
 
-            displayStatistics(dummyStats);
-            displaySummaryStats(dummyStats);
-        }
 
-        // 더미 통계 데이터 생성
-        function generateDummyStatistics() {
-            const students = ['김민수', '이영희', '박철수', '정미영', '최준호', '한소영', '오현우', '장유진'];
-            const competencies = ['자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
-            const activities = ['모둠 토론', '프로젝트 발표', '역할극 활동', '창의적 글쓰기', '실험 활동', '토의 수업'];
+       // ─────────────────────────────────────────────────────────────
+       // 통계: 서버 API 기반으로 집계 (list-students + get-evaluations)
+       // ─────────────────────────────────────────────────────────────
 
-            return students.map(name => {
-                const stats = {};
-                competencies.forEach(comp => {
-                    const evaluations = [];
-                    const count = Math.floor(Math.random() * 5);
-                    
-                    for (let i = 0; i < count; i++) {
-                        evaluations.push({
-                            date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                            activity: activities[Math.floor(Math.random() * activities.length)],
-                            reason: ['적극적인 자세', '뛰어난 통찰력', '창의적 사고', '배려심', '명확한 의사전달', '뛰어난 팀워크'][Math.floor(Math.random() * 6)]
-                        });
-                    }
-                    
-                    stats[comp] = {
-                        count: count,
-                        evaluations: evaluations
-                    };
-                });
-                return { name, stats };
-            });
-        }
+       const COMPETENCIES = ['자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
 
-        // 통계 결과 표시
-        function displayStatistics(statsData) {
-            const container = document.getElementById('statisticsResults');
-            
-            container.innerHTML = statsData.map(student => `
-                <div class="student-detail">
-                    <div class="student-header" onclick="toggleStudentDetail(this)">
-                        <span><strong>${student.name}</strong></span>
-                        <span>▼</span>
-                    </div>
-                    <div class="student-content">
-                        ${Object.entries(student.stats).map(([competency, data]) => `
-                            <div class="competency-stat">
-                                <span>${competency}</span>
-                                <span><strong>${data.count}회</strong></span>
-                            </div>
-                            ${data.evaluations.length > 0 ? `
-                                <div style="margin-left: 15px; margin-bottom: 15px;">
-                                    ${data.evaluations.map(eval => `
-                                        <div style="font-size: 12px; color: #666; margin-bottom: 8px; padding: 8px; background-color: #f8f9fa; border-radius: 5px; border-left: 3px solid #c77dff;">
-                                            <div><strong>📅 ${eval.date}</strong> | <strong>📋 ${eval.activity}</strong></div>
-                                            <div style="margin-top: 3px;">💬 ${eval.reason}</div>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            ` : ''}
-                        `).join('')}
-                    </div>
-                </div>
-            `).join('');
-        }
+       // 통계 로드(클릭 핸들러)
+       async function loadStatistics() {
+         const year = document.getElementById('statsYear').value;
+         const subject = document.getElementById('statsSubject').value;
+         const club = document.getElementById('statsClub').value;
+         const startDate = document.getElementById('startDate').value || '';
+         const endDate   = document.getElementById('endDate').value   || '';
 
-        // 요약 통계 표시
-        function displaySummaryStats(statsData) {
-            const container = document.getElementById('summaryStats');
-            const totalStudents = statsData.length;
-            const competencies = ['자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
-            
-            // 각 역량별로 가장 많이 추천받은 학생 찾기
-            const topStudentsByCompetency = {};
-            competencies.forEach(comp => {
-                let maxCount = 0;
-                let topStudent = '없음';
-                
-                statsData.forEach(student => {
-                    if (student.stats[comp].count > maxCount) {
-                        maxCount = student.stats[comp].count;
-                        topStudent = student.name;
-                    }
-                });
-                
-                topStudentsByCompetency[comp] = {
-                    name: topStudent,
-                    count: maxCount
-                };
-            });
+         try {
+           // 1) 해당 클래스의 학생 목록 조회
+           const qsStudents = new URLSearchParams({ year, subject, club });
+           const resS = await fetch(`/api/admin/list-students?${qsStudents.toString()}`);
+           const jS = await resS.json();
+           if (!resS.ok || !jS.success || !Array.isArray(jS.students) || jS.students.length === 0) {
+             displayStatistics([]); 
+             displaySummaryStats([]);
+             currentStatsData = [];
+             showMessage('해당 조건의 학생 명부가 없습니다.', 'error');
+             return;
+           }
 
-            container.innerHTML = `
-                <div style="margin-bottom: 20px;">
-                    <div style="font-size: 24px; font-weight: bold; color: #2d3748; text-align: center;">
-                        ${totalStudents}명
-                    </div>
-                    <div style="text-align: center; color: #666;">참여 학생 수</div>
-                </div>
-                
-                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; font-size: 13px;">
-                    <h4 style="margin-bottom: 10px; color: #2d3748;">🏆 역량별 최고 추천자</h4>
-                    ${Object.entries(topStudentsByCompetency).map(([comp, data]) => 
-                        `<div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding: 5px; background-color: white; border-radius: 5px;">
-                            <span style="font-size: 12px;">${comp}:</span>
-                            <span style="font-weight: bold; color: #c77dff;">${data.name} (${data.count}회)</span>
-                        </div>`
-                    ).join('')}
-                </div>
-            `;
-        }
+           const students = jS.students; // [{ name, studentId, username?... }]
+
+           // 2) 각 학생의 평가 데이터 병렬 조회
+           const perStudentPromises = students.map(async (stu) => {
+             const targetUsername = (stu.username || stu.studentId || stu.name).toString();
+             const qsEval = new URLSearchParams({ 
+               targetUsername, 
+               evaluationType: 'all',
+               ...(startDate ? { startDate } : {}),
+               ...(endDate   ? { endDate }   : {}),
+             });
+
+             try {
+               const resE = await fetch(`/api/get-evaluations?${qsEval.toString()}`);
+               const jE = await resE.json();
+
+               // 기대 포맷: { success, evaluations: [...] }
+               const evals = (resE.ok && jE.success && Array.isArray(jE.evaluations)) ? jE.evaluations : [];
+     
+               // 3) 학생별 통계 구조로 변환
+               // stats = { '자신감과 리더십': {count, evaluations:[{date,activity,reason}]}, ... }
+               const stats = {};
+               COMPETENCIES.forEach(c => { stats[c] = { count: 0, evaluations: [] }; });
+     
+               evals.forEach(ev => {
+                 // peerEvaluations: [{ competency, nominees: [..] or name, reasons: [...] or reason }]
+                 // selfEvaluation : { competency, reason }
+                 // ev.date: 'YYYY-MM-DD' (get-evaluations에서 ISO 변환해둔 값이 들어옴)
+
+                 // 동료평가: 해당 학생이 '지명된' 기록만 카운트
+                 if (Array.isArray(ev.peerEvaluations)) {
+                   ev.peerEvaluations.forEach(p => {
+                     const comp = p.competency;
+                     if (!COMPETENCIES.includes(comp)) return;
+                 
+                     // nominees 배열(복수 지명) 혹은 name 단일 값 등 다양한 케이스를 수용
+                     const nominees = Array.isArray(p.nominees) ? p.nominees
+                                     : (p.name ? [p.name] : []);
+                     const reasons  = Array.isArray(p.reasons) ? p.reasons
+                                     : (p.reason ? [p.reason] : []);
+                   
+                     const picked = nominees.some(n => n === targetUsername || n === stu.name || n === stu.studentId);
+                     if (picked) {
+                       stats[comp].count += 1;
+                       stats[comp].evaluations.push({
+                         date: ev.date || (ev.timestamp ? (new Date(ev.timestamp).toISOString().slice(0,10)) : ''),
+                         activity: ev.activity || ev.activityName || '-', // 있으면 표시, 없으면 '-'
+                         reason: reasons[0] || '' // 첫 사유만 노출(여럿이면 UI가 너무 길어짐)
+                      });
+                     }
+                   });
+                 }
+
+                 // 자기평가: 참고용으로도 보여주고 싶으면 아래 주석 해제
+                 // if (ev.selfEvaluation && COMPETENCIES.includes(ev.selfEvaluation.competency)) {
+                 //   const comp = ev.selfEvaluation.competency;
+                 //   stats[comp].evaluations.push({
+                 //     date: ev.date || '',
+                 //     activity: ev.activity || '-',
+                 //     reason: `(자기평가) ${ev.selfEvaluation.reason || ''}`
+                 //   });
+                 // }
+               });
+
+               return { name: stu.name, stats };
+             } catch (e) {
+               console.error('개별 학생 통계 변환 오류:', e);
+               // 실패 시 카운트 0으로 리턴
+               const empty = {};
+               COMPETENCIES.forEach(c => { empty[c] = { count: 0, evaluations: [] }; });
+               return { name: stu.name, stats: empty };
+             }
+           });
+
+           const perStudentStats = await Promise.all(perStudentPromises);
+
+           // 4) UI 업데이트
+           currentStatsData = perStudentStats;
+           displayStatistics(perStudentStats);
+           displaySummaryStats(perStudentStats);
+
+         } catch (err) {
+           console.error('통계 조회 오류:', err);
+           showMessage('통계 조회 중 오류가 발생했습니다.', 'error');
+           currentStatsData = [];
+           displayStatistics([]);
+           displaySummaryStats([]);
+         }
+       }
+
+       // 통계 결과 표시 (UI 렌더는 기존 마크업을 그대로 사용)
+       function displayStatistics(statsData) {
+         const container = document.getElementById('statisticsResults');
+
+         if (!Array.isArray(statsData) || statsData.length === 0) {
+           container.innerHTML = `
+             <div style="text-align: center; color: #666; padding: 20px;">
+               통계 데이터가 없습니다. 조건을 변경해 다시 조회해보세요.
+             </div>`;
+           return;
+         }
+
+         container.innerHTML = statsData.map(student => `
+           <div class="student-detail">
+             <div class="student-header" onclick="toggleStudentDetail(this)">
+               <span><strong>${student.name}</strong></span>
+               <span>▼</span>
+             </div>
+             <div class="student-content">
+               ${COMPETENCIES.map(comp => {
+                 const data = student.stats[comp] || { count: 0, evaluations: [] };
+                 return `
+                   <div class="competency-stat">
+                     <span>${comp}</span>
+                     <span><strong>${data.count}회</strong></span>
+                   </div>
+                   ${data.evaluations.length > 0 ? `
+                     <div style="margin-left: 15px; margin-bottom: 15px;">
+                       ${data.evaluations.map(ev => `
+                         <div style="font-size: 12px; color: #666; margin-bottom: 8px; padding: 8px; background-color: #f8f9fa; border-radius: 5px; border-left: 3px solid #c77dff;">
+                           <div><strong>📅 ${ev.date || '-'}</strong> | <strong>📋 ${ev.activity || '-'}</strong></div>
+                           ${ev.reason ? `<div style="margin-top: 3px;">💬 ${ev.reason}</div>` : ''}
+                         </div>
+                       `).join('')}
+                     </div>
+                   ` : '' }
+                 `;
+               }).join('')}
+             </div>
+           </div>
+         `).join('');
+       }
+
+       // 요약 통계 표시
+       function displaySummaryStats(statsData) {
+         const container = document.getElementById('summaryStats');
+
+         if (!Array.isArray(statsData) || statsData.length === 0) {
+           container.innerHTML = `
+             <div style="text-align: center; color: #666; padding: 20px;">
+               통계 데이터가 없습니다.
+             </div>`;
+           return;
+         }
+
+         const totalStudents = statsData.length;
+
+         // 역량별 최고 추천자 계산
+         const topByComp = {};
+         COMPETENCIES.forEach(comp => {
+           let maxCount = 0;
+           let topStudent = '없음';
+           statsData.forEach(st => {
+             const cnt = (st.stats[comp]?.count) || 0;
+             if (cnt > maxCount) {
+               maxCount = cnt;
+               topStudent = st.name;
+             }
+           });
+           topByComp[comp] = { name: topStudent, count: maxCount };
+         });
+
+         container.innerHTML = `
+           <div style="margin-bottom: 20px;">
+             <div style="font-size: 24px; font-weight: bold; color: #2d3748; text-align: center;">
+               ${totalStudents}명
+             </div>
+             <div style="text-align: center; color: #666;">참여 학생 수</div>
+           </div>
+           <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; font-size: 13px;">
+             <h4 style="margin-bottom: 10px; color: #2d3748;">🏆 역량별 최고 추천자</h4>
+             ${COMPETENCIES.map(comp => {
+               const data = topByComp[comp];
+               return `
+                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding: 5px; background-color: white; border-radius: 5px;">
+                   <span style="font-size: 12px;">${comp}:</span>
+                   <span style="font-weight: bold; color: #c77dff;">${data.name} (${data.count}회)</span>
+                 </div>`;
+             }).join('')}
+           </div>
+         `;
+       }
+
+       // 엑셀 다운로드(새 데이터 구조 대응)
+       function downloadExcel() {
+         if (!Array.isArray(currentStatsData) || currentStatsData.length === 0) {
+           alert('다운로드할 데이터가 없습니다. 먼저 통계를 조회해주세요.');
+           return;
+         }
+
+         const workbook = XLSX.utils.book_new();
+
+         // 시트1: 역량별 카운트
+         const header = ['학생명', ...COMPETENCIES];
+         const rows = currentStatsData.map(st => {
+           return [st.name, ...COMPETENCIES.map(c => st.stats[c]?.count || 0)];
+         });
+         const ws1 = XLSX.utils.aoa_to_sheet([header, ...rows]);
+         XLSX.utils.book_append_sheet(workbook, ws1, '역량별 통계');
+
+         // 시트2: 상세(날짜/활동/사유)
+         const detailHeader = ['학생명', '역량', '날짜', '활동명', '추천 이유'];
+         const detailRows = [];
+         currentStatsData.forEach(st => {
+           COMPETENCIES.forEach(c => {
+             const evs = st.stats[c]?.evaluations || [];
+             evs.forEach(ev => {
+               detailRows.push([st.name, c, ev.date || '', ev.activity || '', ev.reason || '']);
+             });
+           });
+         });
+         const ws2 = XLSX.utils.aoa_to_sheet([detailHeader, ...detailRows]);
+         XLSX.utils.book_append_sheet(workbook, ws2, '상세 평가 내역');
+
+         const today = new Date().toISOString().split('T')[0];
+         const startDate = document.getElementById('startDate').value || '전체';
+         const endDate   = document.getElementById('endDate').value   || '기간';
+         XLSX.writeFile(workbook, `에이스_통계_${startDate}_${endDate}_${today}.xlsx`);
+
+         showMessage('엑셀 파일이 다운로드되었습니다! 📥', 'success');
+       }        
 
         // 학생 상세 정보 토글
         function toggleStudentDetail(header) {
@@ -1280,4 +1418,5 @@
 </body>
 
 </html>
+
 
