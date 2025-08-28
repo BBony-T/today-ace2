@@ -1260,59 +1260,75 @@
 
         // 저장 버튼 → 서버 업로드 (skipExisting: true)
         // 저장 버튼 → 서버 업로드 (두 스키마(roster/students) 자동 시도)
+        // ...위 코드는 그대로 두시고, saveRoster만 아래로 교체...
+
+        // 저장 버튼 → 서버 업로드 (skipExisting: true)
         async function saveRoster() {
           const { type, name } = getUploadMeta();
 
-          if (!name) { showMessage('카테고리 이름을 입력하세요.', 'error'); return; }
+          if (!name) {
+            showMessage('카테고리 이름을 입력하세요.', 'error');
+            return;
+          }
           if (!Array.isArray(UP.preview) || UP.preview.length === 0) {
-            showMessage('업로드할 데이터가 없습니다.', 'error'); return;
+            showMessage('업로드할 데이터가 없습니다.', 'error');
+            return;
           }
 
           // 로그인 정책: ID=학번(username), PW=이름(password)
-          const rows = UP.preview.map(r => ({
-            username: String(r.studentId || '').trim(),
-            password: String(r.name || '').trim(),
-            name: String(r.name || '').trim(),
-            studentId: String(r.studentId || '').trim(),
+          const roster = UP.preview.map(r => ({
+            username: r.studentId,
+            password: r.name,
+            name: r.name,
+            studentId: r.studentId,
             subject: type === 'subject' ? name : '',
             club:    type === 'club'    ? name : '',
           }));
 
-          const send = async (payload) => {
-            const res = await fetch('/api/admin/import-students', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-            });
-            const j = await readJsonSafe(res);
-            return { ok: res.ok && j?.success, res, j };
-          };
-
+          // 디버그: 실제 전송 데이터 콘솔에서 확인
+          console.log('[import-students] try payload.roster =', { skipExisting: true, roster });
           try {
-            // 1차: 기존 스키마 유지
-            let out = await send({ roster: rows, skipExisting: true });
-            // 2차: 다른 스키마도 자동 시도
-            if (!out.ok) out = await send({ students: rows, skipExisting: true });
+            // 1차: 서버가 { roster }를 받는 경우
+            const j1 = await postJson('/api/admin/import-students', {
+              skipExisting: true,
+              roster
+            });
+            afterImportSuccess(j1);
+            return;
+          } catch (e1) {
+            // 서버가 “명부가 비어있습니다” 류로 거절하면, { students }로 재시도
+            const msg = String(e1?.message || '');
+            console.warn('[import-students] 1st try failed:', msg);
 
-            if (!out.ok) {
-              const msg = out.j?.error || out.j?.message || out.res.statusText || `HTTP ${out.res.status}`;
-              throw new Error(msg);
+            // 400이고 비어있다고 나오면 보통 필드명이 다를 때가 많음 → { students }로 재시도
+            if (msg.includes('비어') || msg.includes('empty') || msg.includes('Bad Request')) {
+              console.log('[import-students] retry payload.students =', { skipExisting: true, students: roster });
+              try {
+                const j2 = await postJson('/api/admin/import-students', {
+                  skipExisting: true,
+                  students: roster
+                });
+                afterImportSuccess(j2);
+                return;
+              } catch (e2) {
+                console.error('[import-students] 2nd try failed:', e2);
+                showMessage(`서버 업로드 실패: ${e2.message}`, 'error');
+              }
+            } else {
+              showMessage(`서버 업로드 실패: ${msg}`, 'error');
             }
-
-            const imported = out.j?.importedCount ?? rows.length;
-            showMessage(`명부가 저장되었습니다. (총 ${imported}명)`, 'success');
-
-            UP.preview = [];
-            renderPreview();
-            closeRosterModal();
-            await loadStudentStatus();
-            await loadRosterList();
-          } catch (e) {
-            console.error('import-students 실패:', e);
-            showMessage(`서버 업로드 중 오류: ${e.message}`, 'error');
           }
         }
 
+        function afterImportSuccess(respJson) {
+          showMessage(`명부가 저장되었습니다. (총 ${respJson.importedCount ?? UP.preview.length}명)`, 'success');
+          UP.preview = [];
+          renderPreview();
+          closeRosterModal();
+          // 갱신
+          loadStudentStatus();
+          loadRosterList();
+        }
 
 
         //모달 닫기 삭
@@ -1480,6 +1496,7 @@
 </body>
 
 </html>
+
 
 
 
