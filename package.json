@@ -10,7 +10,7 @@
     "dev": ""
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0"
+    "@google/generative-ai": "^0.21.0",
     "firebase-admin": "^12.5.0",
     "bcryptjs": "^2.4.3"
   },
@@ -27,4 +27,5 @@
     "url": "https://github.com/BBony-T/today-ace2.git"
   }
 }
+
 
