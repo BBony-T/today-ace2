@@ -456,33 +456,11 @@
             <!-- 클래스 선택 -->
             <div class="card orange">
                 <h3>🏫 클래스 관리</h3>
-                <div class="class-selector">
-                    <select id="yearSelect">
-                        <option value="2024">2024년</option>
-                        <option value="2025" selected>2025년</option>
-                        <option value="2026">2026년</option>
-                    </select>
-                    <select id="subjectSelect">
-                        <option value="">과목 선택</option>
-                        <option value="국어">국어</option>
-                        <option value="수학">수학</option>
-                        <option value="영어">영어</option>
-                        <option value="과학">과학</option>
-                        <option value="사회">사회</option>
-                        <option value="창체">창체</option>
-                    </select>
-                    <select id="clubSelect">
-                        <option value="">동아리 선택</option>
-                        <option value="코딩클럽">코딩클럽</option>
-                        <option value="독서토론">독서토론</option>
-                        <option value="과학실험">과학실험</option>
-                        <option value="미술반">미술반</option>
-                    </select>
-                    <button onclick="loadStudentStatus()">조회</button>
-                    <button onclick="showRosterModal()" style="background-color: #c77dff; color: white;">명부 관리</button>
-                </div>
-                <div id="classInfo" style="text-align: center; color: #666; margin-bottom: 15px;"></div>
+                <div class="class-selector" style="justify-content:center; gap:12px;">
+                  <button onclick="showRosterModal()" style="background-color:#c77dff; color:white;">명부 업로드</button>
+                  <button onclick="downloadTemplate()">양식 다운로드 (CSV)</button>
             </div>
+            <div id="classInfo" style="text-align:center; color:#666; margin-bottom:15px;">현재 조회: 전체</div>
             
             <div class="card orange" id="rosterListCard">
               <h3>📚 저장된 명부</h3>
@@ -613,8 +591,15 @@
                 <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event)">
                 <div>📁 CSV 또는 Excel 파일을 선택하세요</div>
                 <div style="font-size: 12px; color: #666; margin-top: 5px;">
-                    형식: 이름, 학번, 클래스, 과목, 동아리 순으로 작성
+                  형식: <strong>이름, 학번, 과목/동아리</strong> (세 번째 칸에 과목 또는 동아리 중 하나 입력)
                 </div>
+                <div style="text-align:center; margin-top:10px;">
+                  <button onclick="downloadTemplate()" 
+                          style="background:#ffd93d; color:#2d3748; border:none; padding:8px 14px; border-radius:8px; font-weight:600;">
+                    📥 양식 다운로드
+                  </button>
+                </div>
+
             </div>
             
             <div style="margin: 20px 0; text-align: center;">
@@ -629,6 +614,9 @@
     </div>
 
     <script>
+        // 과목 후보(파일 3열 값이 여기에 있으면 과목, 아니면 동아리로 분류)
+        const SUBJECT_CANDIDATES = ['국어','수학','영어','과학','사회','창체','역사','음악','미술','체육','정보','보건'];
+
         let currentStudentData = [];
         let currentStatsData = [];
 
@@ -654,24 +642,22 @@
             }
         }
 
-         // 조회 로드
+           // 조회 로드
            async function loadRosterList() {
-             const { year, subject, club } = getCurrentFilter();
-             const qs = new URLSearchParams({ year, subject, club }).toString();
              try {
-               const res = await fetch(`/api/admin/list-students?${qs}`);
+               const res = await fetch('/api/admin/list-students'); // 전체
                const j = await res.json();
                if (!res.ok || !j.success) throw new Error(j.error || '조회 실패');
-
+              
                const students = Array.isArray(j.students) ? j.students : [];
                renderRosterList(students);
              } catch (e) {
                console.error(e);
                document.getElementById('rosterList').innerHTML =
-                 '<div style="color:#c53030;">목록을 불러오지 못했습니다.</div>';
+                '<div style="color:#c53030;">목록을 불러오지 못했습니다.</div>';
              }
            }
-
+             
            function renderRosterList(students) {
              const box = document.getElementById('rosterList');
              if (students.length === 0) {
@@ -692,8 +678,14 @@
            }
         
         // 엑셀 양식 
+        // 엑셀/CSV 업로드용 양식 다운로드 (이름, 학번, 과목/동아리)
         function downloadTemplate() {
-          const csv = '이름,학번,클래스\n홍길동,20250001,1반\n';
+          const csv = [
+            '이름,학번,과목/동아리',
+            '홍길동,20250001,국어',
+            '김나래,20250002,코딩클럽'
+          ].join('\n');
+
           const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -701,37 +693,34 @@
           a.download = '명부_양식.csv';
           document.body.appendChild(a);
           a.click();
-         document.body.removeChild(a);
+          document.body.removeChild(a);
           URL.revokeObjectURL(url);
         }
+
         
         // 학생 현황 로드
         async function loadStudentStatus() {
-          const { year, subject, club } = getCurrentFilter();
-          const qs = new URLSearchParams({ year, subject, club }).toString();
-
           try {
-            const res = await fetch(`/api/admin/list-students?${qs}`);
+            const res = await fetch('/api/admin/list-students'); // 전체
             const j = await res.json();
-
+        
             if (!res.ok || !j.success) throw new Error(j.error || '조회 실패');
-
+        
             const students = Array.isArray(j.students) ? j.students : [];
-            updateClassInfo(year, subject, club);
-
+            document.getElementById('classInfo').textContent = '현재 조회: 전체';
+        
             if (students.length === 0) {
               renderStudentStatusEmpty();
               return;
             }
 
-            // status / lastUpdate 등이 있으면 사용, 없으면 기본값
             const normalized = students.map(s => ({
               name: s.name,
               studentId: s.studentId,
               status: s.status || 'not-started',
               hasPeerEvaluation: !!s.hasPeerEvaluation,
               hasSelfEvaluation: !!s.hasSelfEvaluation,
-              lastUpdate: s.lastUpdate || '-'
+             lastUpdate: s.lastUpdate || '-'
             }));
 
             displayStudentStatus(normalized);
@@ -741,6 +730,7 @@
             renderStudentStatusEmpty();
           }
         }
+
 
         function renderStudentStatusEmpty() {
           const grid = document.getElementById('studentStatusGrid');
@@ -1094,66 +1084,6 @@
             }
         }
 
-        // 엑셀 다운로드
-        function downloadExcel() {
-            if (currentStatsData.length === 0) {
-                alert('다운로드할 데이터가 없습니다. 먼저 통계를 조회해주세요.');
-                return;
-            }
-
-            const workbook = XLSX.utils.book_new();
-            const worksheetData = [];
-            
-            // 헤더 생성
-            const headers = ['학생명', '자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
-            worksheetData.push(headers);
-            
-            // 데이터 추가
-            currentStatsData.forEach(student => {
-                const row = [student.name];
-                const competencies = ['자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
-                competencies.forEach(comp => {
-                    row.push(student.stats[comp].count);
-                });
-                worksheetData.push(row);
-            });
-
-            // 상세 평가 시트 생성
-            const detailData = [];
-            detailData.push(['학생명', '역량', '날짜', '활동명', '추천 이유']);
-            
-            currentStatsData.forEach(student => {
-                Object.entries(student.stats).forEach(([competency, data]) => {
-                    if (data.evaluations.length > 0) {
-                        data.evaluations.forEach(evaluation => {
-                            detailData.push([
-                                student.name, 
-                                competency, 
-                                evaluation.date,
-                                evaluation.activity,
-                                evaluation.reason
-                            ]);
-                        });
-                    }
-                });
-            });
-
-            // 워크시트 생성
-            const worksheet1 = XLSX.utils.aoa_to_sheet(worksheetData);
-            const worksheet2 = XLSX.utils.aoa_to_sheet(detailData);
-            
-            XLSX.utils.book_append_sheet(workbook, worksheet1, '역량별 통계');
-            XLSX.utils.book_append_sheet(workbook, worksheet2, '상세 평가 내역');
-
-            // 파일 다운로드
-            const today = new Date().toISOString().split('T')[0];
-            const startDate = document.getElementById('startDate').value || '전체';
-            const endDate = document.getElementById('endDate').value || '기간';
-            XLSX.writeFile(workbook, `에이스_통계_${startDate}_${endDate}_${today}.xlsx`);
-            
-            showMessage('엑셀 파일이 다운로드되었습니다! 📥', 'success');
-        }
-
         // 활동 정보 추가
         function addActivityInfo() {
             const date = document.getElementById('activityDate').value;
@@ -1288,6 +1218,8 @@
         }
 
         // 명부 데이터 처리(서버 업로드)
+        // 명부 데이터 처리(서버 업로드)
+        // CSV/엑셀: [이름, 학번, 과목/동아리]
         async function processRosterData(rows) {
           if (!rows || rows.length === 0) {
             showMessage('파일에 데이터가 없습니다.', 'error');
@@ -1297,20 +1229,26 @@
           // 헤더 제거
           const headerLike = String(rows[0].join(',')).replace(/\s/g,'');
           if (/(이름|name).*(학번|id)/i.test(headerLike)) rows.shift();
-
-          // [이름, 학번, 클래스, 과목, 동아리] 5열 기준
+        
           const roster = rows
-            .filter(r => (r[0] && r[1]))   // 이름/학번 필수
+            .map(r => r.map(c => (c ?? '').toString().trim()))
+            .filter(r => r[0] && r[1]) // 이름/학번 필수
             .map(r => {
-              const name = String(r[0]).trim();
-              const studentId = String(r[1]).trim();
-              const klass = r[2] ? String(r[2]).trim() : '';
-              const subject = r[3] ? String(r[3]).trim() : '';
-              const club = r[4] ? String(r[4]).trim() : '';
+              const name = r[0];
+              const studentId = r[1];
+              const third = r[2] || '';   // 과목 또는 동아리 하나만 들어옴
+              let subject = '';
+              let club = '';
+
+              if (third) {
+                // 과목 후보에 있으면 과목, 아니면 동아리로 분류
+                if (SUBJECT_CANDIDATES.includes(third)) subject = third;
+                else club = third;
+              }
+
               return {
                 name,
                 studentId,
-                class: klass,
                 subject,
                 club,
                 username: studentId,
@@ -1322,21 +1260,16 @@
             showMessage('유효한 행이 없습니다. (이름, 학번은 필수)', 'error');
             return;
           }
-          // 업로드 대상 메타(현재 셀렉터 값)
-          const year    = document.getElementById('yearSelect')?.value || '';
-          const subject = document.getElementById('subjectSelect')?.value || '';
-          const club    = document.getElementById('clubSelect')?.value || '';
-          //
+
           try {
             const res = await fetch('/api/admin/import-students', {
-              method: 'POST',
+             method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              // ⬇️ 서버가 year/subject/club과 함께 받도록 변경
-              body: JSON.stringify({ year, subject, club, roster })
+              body: JSON.stringify({ roster }) // 메타 없이 roster만 전송
             });
             const j = await res.json().catch(() => ({}));
             if (!res.ok || !j.success) throw new Error(j?.error || `HTTP ${res.status}`);
-          
+        
             showMessage(
               `명부가 저장되었습니다. (총 ${j.importedCount ?? j.imported?.length ?? roster.length}명)`,
               'success'
@@ -1349,6 +1282,7 @@
             showMessage(`서버 업로드 중 오류: ${e.message}`, 'error');
           }
         }
+
 
         // 테스트 데이터 생성 삭제
         function clearAllData() {
@@ -1408,6 +1342,7 @@
 </body>
 
 </html>
+
 
 
 
