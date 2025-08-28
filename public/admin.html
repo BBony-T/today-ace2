@@ -1322,23 +1322,31 @@
             showMessage('유효한 행이 없습니다. (이름, 학번은 필수)', 'error');
             return;
           }
-
+          // 업로드 대상 메타(현재 셀렉터 값)
+          const year    = document.getElementById('yearSelect')?.value || '';
+          const subject = document.getElementById('subjectSelect')?.value || '';
+          const club    = document.getElementById('clubSelect')?.value || '';
+          //
           try {
             const res = await fetch('/api/admin/import-students', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ roster })
+              // ⬇️ 서버가 year/subject/club과 함께 받도록 변경
+              body: JSON.stringify({ year, subject, club, roster })
             });
-            const j = await res.json();
-            if (!res.ok || !j.success) throw new Error(j.error || '업로드 실패');
-
-            showMessage(`명부가 저장되었습니다. (총 ${j.imported?.length ?? roster.length}명)`, 'success');
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok || !j.success) throw new Error(j?.error || `HTTP ${res.status}`);
+          
+            showMessage(
+              `명부가 저장되었습니다. (총 ${j.importedCount ?? j.imported?.length ?? roster.length}명)`,
+              'success'
+            );
             closeRosterModal();
             await loadStudentStatus();
-            await loadRosterList();
+            await (typeof loadRosterList === 'function' ? loadRosterList() : Promise.resolve());
           } catch (e) {
-            console.error(e);
-            showMessage('서버 업로드 중 오류가 발생했습니다.', 'error');
+            console.error('import-students 실패:', e);
+            showMessage(`서버 업로드 중 오류: ${e.message}`, 'error');
           }
         }
 
@@ -1400,6 +1408,7 @@
 </body>
 
 </html>
+
 
 
 
