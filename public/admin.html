@@ -917,7 +917,7 @@
            // 1) 해당 클래스의 학생 목록 조회
            const qsStudents = new URLSearchParams({ year, subject, club });
            const resS = await fetch(`/api/admin/list-students?${qsStudents.toString()}`);
-           const jS = await resS.json();
+           const jS = await readJsonSafe(resS);
            if (!resS.ok || !jS.success || !Array.isArray(jS.students) || jS.students.length === 0) {
              displayStatistics([]); 
              displaySummaryStats([]);
@@ -1259,40 +1259,49 @@
         } 
 
         // 저장 버튼 → 서버 업로드 (skipExisting: true)
+        // 저장 버튼 → 서버 업로드 (두 스키마(roster/students) 자동 시도)
         async function saveRoster() {
           const { type, name } = getUploadMeta();
 
-          if (!name) {
-            showMessage('카테고리 이름을 입력하세요.', 'error');
-            return;
-          }
+          if (!name) { showMessage('카테고리 이름을 입력하세요.', 'error'); return; }
           if (!Array.isArray(UP.preview) || UP.preview.length === 0) {
-            showMessage('업로드할 데이터가 없습니다.', 'error');
-            return;
+            showMessage('업로드할 데이터가 없습니다.', 'error'); return;
           }
 
           // 로그인 정책: ID=학번(username), PW=이름(password)
-          const roster = UP.preview.map(r => ({
-            username: r.studentId,
-            password: r.name,
-            name: r.name,
-            studentId: r.studentId,
+          const rows = UP.preview.map(r => ({
+            username: String(r.studentId || '').trim(),
+            password: String(r.name || '').trim(),
+            name: String(r.name || '').trim(),
+            studentId: String(r.studentId || '').trim(),
             subject: type === 'subject' ? name : '',
             club:    type === 'club'    ? name : '',
           }));
 
-          try {
+          const send = async (payload) => {
             const res = await fetch('/api/admin/import-students', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ roster, skipExisting: true }),
+              body: JSON.stringify(payload),
             });
-            const j = await res.json().catch(() => ({}));
-            if (!res.ok || !j.success) throw new Error(j.error || `HTTP ${res.status}`);
+            const j = await readJsonSafe(res);
+            return { ok: res.ok && j?.success, res, j };
+          };
 
-            showMessage(`명부가 저장되었습니다. (총 ${j.importedCount ?? roster.length}명)`, 'success');
+          try {
+            // 1차: 기존 스키마 유지
+            let out = await send({ roster: rows, skipExisting: true });
+            // 2차: 다른 스키마도 자동 시도
+            if (!out.ok) out = await send({ students: rows, skipExisting: true });
 
-            // 초기화 & 새로고침
+            if (!out.ok) {
+              const msg = out.j?.error || out.j?.message || out.res.statusText || `HTTP ${out.res.status}`;
+              throw new Error(msg);
+            }
+
+            const imported = out.j?.importedCount ?? rows.length;
+            showMessage(`명부가 저장되었습니다. (총 ${imported}명)`, 'success');
+
             UP.preview = [];
             renderPreview();
             closeRosterModal();
@@ -1303,6 +1312,7 @@
             showMessage(`서버 업로드 중 오류: ${e.message}`, 'error');
           }
         }
+
 
 
         //모달 닫기 삭
@@ -1470,6 +1480,7 @@
 </body>
 
 </html>
+
 
 
 
