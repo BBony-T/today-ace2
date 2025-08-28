@@ -583,37 +583,78 @@
     </div>
 
     <!-- 명부 관리 모달 (간단한 구현) -->
-    <div id="rosterModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-        <div style="background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%;">
-            <h3 style="margin-bottom: 20px; text-align: center;">📋 명부 관리</h3>
-            
-            <div class="file-upload" onclick="document.getElementById('csvFile').click()">
-                <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event)">
-                <div>📁 CSV 또는 Excel 파일을 선택하세요</div>
-                <div style="font-size: 12px; color: #666; margin-top: 5px;">
-                  형식: <strong>이름, 학번, 과목/동아리</strong> (세 번째 칸에 과목 또는 동아리 중 하나 입력)
-                </div>
-                <div style="text-align:center; margin-top:10px;">
-                  <button onclick="downloadTemplate()" 
-                          style="background:#ffd93d; color:#2d3748; border:none; padding:8px 14px; border-radius:8px; font-weight:600;">
-                    📥 양식 다운로드
-                  </button>
-                </div>
+    <!-- 명부 업로드 모달 (카테고리 지정 + 미리보기 + 저장) -->
+    <div id="rosterModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; align-items:center; justify-content:center;">
+      <div style="background:white; padding:28px; border-radius:16px; width:min(560px,92%);">
+        <h3 style="margin-bottom:16px; text-align:center;">📋 명부 업로드</h3>
 
-            </div>
-            
-            <div style="margin: 20px 0; text-align: center;">
-                <button onclick="clearAllData()" style="background-color: #e53e3e; color: white; border: none; padding: 8px 15px; border-radius: 8px; margin-right: 10px;">
-                    🗑️ 전체 초기화
-                </button>
-                <button onclick="closeRosterModal()" style="background-color: #4a5568; color: white; border: none; padding: 8px 15px; border-radius: 8px;">
-                    닫기
-                </button>
-            </div>
+        <!-- 1) 카테고리 지정 -->
+        <div style="display:grid; grid-template-columns: 120px 1fr; gap:8px; align-items:center; margin-bottom:14px;">
+          <div style="font-weight:600;">카테고리 종류</div>
+          <div>
+            <label style="margin-right:12px;"><input type="radio" name="catType" value="subject" checked> 과목</label>
+            <label><input type="radio" name="catType" value="club"> 동아리</label>
+          </div>
+
+          <div style="font-weight:600;">카테고리 이름</div>
+          <div>
+            <input id="categoryName" placeholder="예) 국어 / 코딩클럽" style="width:100%; padding:8px 10px; border:2px solid #ffd93d; border-radius:8px;">
+          </div>
         </div>
+
+        <!-- 2) 파일 선택 -->
+        <div class="file-upload" onclick="document.getElementById('csvFile').click()">
+          <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event)">
+          <div>📁 CSV 또는 Excel 파일을 선택하세요</div>
+          <div style="font-size:12px; color:#666; margin-top:5px;">
+            형식: <strong>이름, 학번</strong> (카테고리는 위에서 미리 지정)
+          </div>
+          <div style="text-align:center; margin-top:10px;">
+            <button onclick="downloadTemplate()" 
+                    style="background:#ffd93d; color:#2d3748; border:none; padding:8px 14px; border-radius:8px; font-weight:600;">
+              📥 양식 다운로드
+            </button>
+          </div>
+        </div>
+
+        <!-- 3) 미리보기 -->
+        <div id="uploadPreview" style="margin-top:12px; font-size:13px; color:#2d3748;">
+          파일을 선택하면 여기 미리보기가 표시됩니다.
+        </div>
+
+        <!-- 4) 액션 버튼 -->
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:18px;">
+          <button onclick="clearAllData()" style="background:#e53e3e; color:#fff; border:none; padding:8px 14px; border-radius:8px;">
+            🗑️ 전체 초기화
+          </button>
+          <button id="saveRosterBtn" onclick="saveRoster()" disabled
+                 style="background:#6b46c1; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:600;">
+            저장
+          </button>
+          <button onclick="closeRosterModal()" style="background:#4a5568; color:#fff; border:none; padding:8px 14px; border-radius:8px;">
+            닫기
+          </button>
+        </div>
+      </div>
     </div>
 
+
     <script>
+        async function postJson(url, payload) {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          let j = {};
+          try { j = await res.json(); } catch (_) {}
+          if (!res.ok || !j.success) {
+            const msg = j?.error || res.statusText || `HTTP ${res.status}`;
+            throw new Error(msg);
+          }
+          return j;
+        }
+
         // 과목 후보(파일 3열 값이 여기에 있으면 과목, 아니면 동아리로 분류)
         const SUBJECT_CANDIDATES = ['국어','수학','영어','과학','사회','창체','역사','음악','미술','체육','정보','보건'];
 
@@ -645,37 +686,44 @@
            // 조회 로드
            async function loadRosterList() {
              try {
-               const res = await fetch('/api/admin/list-students'); // 전체
+               const res = await fetch('/api/admin/list-students'); // 전체 학생
                const j = await res.json();
                if (!res.ok || !j.success) throw new Error(j.error || '조회 실패');
-              
                const students = Array.isArray(j.students) ? j.students : [];
                renderRosterList(students);
              } catch (e) {
                console.error(e);
                document.getElementById('rosterList').innerHTML =
-                '<div style="color:#c53030;">목록을 불러오지 못했습니다.</div>';
+                 '<div style="color:#c53030;">목록을 불러오지 못했습니다.</div>';
              }
            }
-             
+
+           // 카테고리(과목/동아리)만 보여주기
            function renderRosterList(students) {
              const box = document.getElementById('rosterList');
-             if (students.length === 0) {
-               box.innerHTML = '<div style="color:#666;">현재 조건(연도/과목/동아리)에 저장된 명부가 없습니다.</div>';
+             if (!students.length) {
+               box.innerHTML = '<div style="color:#666;">저장된 명부가 없습니다. 먼저 업로드 해 주세요.</div>';
                return;
              }
-             const byClass = {};
+             const bySubject = {};
+             const byClub = {};
              students.forEach(s => {
-               const k = s.class || '미지정';
-               byClass[k] = (byClass[k] || 0) + 1;
+               if (s.subject) bySubject[s.subject] = (bySubject[s.subject] || 0) + 1;
+               if (s.club)    byClub[s.club]       = (byClub[s.club] || 0) + 1;
              });
-             const summary = Object.entries(byClass)
-               .map(([klass, count]) => `<li>${klass} : <strong>${count}</strong>명</li>`).join('');
+
+             const chips = obj => Object.entries(obj)
+               .map(([k,v]) => `<span style="display:inline-block;margin:3px;padding:6px 10px;border-radius:999px;background:#fff5e6;border:1px solid #ffd93d;">${k} <strong>${v}</strong>명</span>`)
+               .join('');
+
              box.innerHTML = `
-               <div style="margin-bottom:8px;">총 <strong>${students.length}</strong>명</div>
-               <ul style="padding-left:18px;">${summary}</ul>
+               <div style="margin-bottom:10px;"><strong>과목</strong></div>
+               <div style="margin-bottom:14px;">${Object.keys(bySubject).length ? chips(bySubject) : '<span style="color:#999;">없음</span>'}</div>
+               <div style="margin-bottom:10px;"><strong>동아리</strong></div>
+               <div>${Object.keys(byClub).length ? chips(byClub) : '<span style="color:#999;">없음</span>'}</div>
              `;
            }
+
         
         // 엑셀 양식 
         // 엑셀/CSV 업로드용 양식 다운로드 (이름, 학번, 과목/동아리)
@@ -1215,8 +1263,8 @@
               return text
                .replace(/\r/g, '')           // CR 제거
                .split('\n')
-              .map(line => line.split(',').map(cell => cell.trim()))
-              .filter(cells => cells.some(c => c)); // 완전 빈 줄 제거
+              .map(line => line.split(',').map(c => c.trim()))
+              .filter(cells => cells.some(c => c)); // 완전 빈줄 제거
         }
 
         // 명부 데이터 처리(서버 업로드)
@@ -1351,6 +1399,7 @@
 </body>
 
 </html>
+
 
 
 
