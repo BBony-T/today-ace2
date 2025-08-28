@@ -1217,8 +1217,6 @@
                .split('\n')
               .map(line => line.split(',').map(cell => cell.trim()))
               .filter(cells => cells.some(c => c)); // 완전 빈 줄 제거
-            const lines = text.split('\n');
-            return lines.map(line => line.split(',').map(cell => cell.trim()));
         }
 
         // 명부 데이터 처리(서버 업로드)
@@ -1406,6 +1404,7 @@
 </body>
 
 </html>
+
 
 
 
