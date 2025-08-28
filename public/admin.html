@@ -1222,14 +1222,73 @@
         // CSV/엑셀: [이름, 학번, 과목/동아리]
         async function processRosterData(rows) {
           if (!rows || rows.length === 0) {
-            showMessage('파일에 데이터가 없습니다.', 'error');
-            return;
+            showMessage('파일에 데이터가 없습니다.', 'error'); return;
           }
+          // 1) 현재 서버에 저장된 명부를 불러와서 studentId 집합을 만듦
+          let existingIds = new Set();
+          try {
+            const exRes = await fetch('/api/admin/list-students');
+            const ex = await exRes.json();
+            if (exRes.ok && ex.success && Array.isArray(ex.students)) {
+              existingIds = new Set(ex.students.map(s => (s.studentId || '').toString().trim()));
+            }
+          } catch (_) {}
 
+          // 2) CSV/엑셀 파싱 -> [이름,학번,과목/동아리]
+          const headerLike = String(rows[0].join(',')).replace(/\s/g,'');
+          if (/(이름|name).*(학번|id)/i.test(headerLike)) rows.shift();
+
+          // 3) 파일 안 중복 제거 (studentId 기준)
+          const seen = new Set();
+            
           // 헤더 제거
           const headerLike = String(rows[0].join(',')).replace(/\s/g,'');
           if (/(이름|name).*(학번|id)/i.test(headerLike)) rows.shift();
-        
+           const roster = rows
+            .map(r => r.map(c => (c ?? '').toString().trim()))
+            .filter(r => r[0] && r[1])
+            .filter(r => {                    // 파일 내부 중복 제거
+              const ok = !seen.has(r[1]);
+              if (ok) seen.add(r[1]);
+              return ok;
+            })
+            .filter(r => !existingIds.has(r[1]))  // 서버에 이미 있던 학번 제외
+            .map(r => {
+              const name = r[0];
+              const studentId = r[1];
+              const third = r[2] || '';
+              let subject = '', club = '';
+              if (third) {
+                if (SUBJECT_CANDIDATES.includes(third)) subject = third;
+                else club = third;
+              }
+              return { name, studentId, subject, club, username: studentId, password: studentId };
+            });
+
+          if (roster.length === 0) {
+            showMessage('새로 추가할 학생이 없습니다. (이미 등록된 학번입니다)', 'error'); return;
+          }
+
+          try {
+            const res = await fetch('/api/admin/import-students', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              // 서버가 중복을 건너뛰도록 힌트값도 같이 보냄(서버 미지원이어도 무해)
+              body: JSON.stringify({ roster, skipExisting: true })
+            });
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok || !j.success) throw new Error(j?.error || `HTTP ${res.status}`);
+
+            showMessage(`명부가 저장되었습니다. (총 ${j.importedCount ?? j.imported?.length ?? roster.length}명)`, 'success');
+            closeRosterModal();
+            await loadStudentStatus();
+            await loadRosterList();
+          } catch (e) {
+            console.error('import-students 실패:', e);
+            showMessage(`서버 업로드 중 오류: ${e.message}`, 'error');
+          }
+        }
+            
           const roster = rows
             .map(r => r.map(c => (c ?? '').toString().trim()))
             .filter(r => r[0] && r[1]) // 이름/학번 필수
@@ -1342,6 +1401,7 @@
 </body>
 
 </html>
+
 
 
 
