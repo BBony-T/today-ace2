@@ -433,6 +433,7 @@
     </div>
 
     <script>
+      let lastStats = null; 
       // ========= 세션에서 사용자 정보 로드 & 인사 =========
       const ss = window.sessionStorage;
       const username = ss.getItem('username') || 'student1'; // 로그인 아이디
@@ -464,19 +465,25 @@
         }
       }
 
-      // ========= 진로/관심분야 저장 (로컬 유지) =========
-      function saveCareerInterest() {
-        const v = document.getElementById('careerInterest').value.trim();
-        localStorage.setItem(`career:${username}`, v);
-        const msg = document.getElementById('careerMessage');
-        msg.textContent = '저장되었어요.';
-        setTimeout(() => (msg.textContent = ''), 2000);
-      }
-      function loadCareerInterest() {
-        const v = localStorage.getItem(`career:${username}`) || '';
-        const el = document.getElementById('careerInterest');
-        if (el) el.value = v;
-      }
+     // ========= 진로/관심분야 저장 (로컬 유지) =========
+     function saveCareerInterest() {
+       const v = document.getElementById('careerInterest').value.trim();
+       localStorage.setItem(`career:${username}`, v);
+
+       const msg = document.getElementById('careerMessage');
+       msg.textContent = '저장되었어요.';
+       setTimeout(() => (msg.textContent = ''), 2000);
+
+       // ▶ 저장 후 AI 조언을 즉시 새로고침
+       if (lastStats) updateAIAdvice(lastStats);
+     }
+
+     function loadCareerInterest() {
+       const v = localStorage.getItem(`career:${username}`) || '';
+       const el = document.getElementById('careerInterest');
+       if (el) el.value = v;
+     }
+
 
      // ========= 통계 로드: 서버 우선 → 실패 시 localStorage 폴백 =========
       let competencyChart = null;
@@ -621,6 +628,7 @@
 
       // ========= UI 렌더링 =========
       function renderStats(stats) {
+        lastStats = stats;
         updateSummaryStats(stats);
         updateCharts(stats);
         updateAIAdvice(stats);
@@ -712,7 +720,7 @@
       }
 
       async function updateAIAdvice(stats) {
-        const career = (localStorage.getItem('careerInterest') || '').trim();
+        const career = (localStorage.getItem(`career:${username}`) || '').trim();
        const summary = buildStatsSummary(stats);
 
         // 화면에 잠깐 로딩 메시지
@@ -764,4 +772,5 @@
 </body>
 
 </html>
+
 
