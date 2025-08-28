@@ -1291,60 +1291,6 @@
           }
         }
 
-            
-          const roster = rows
-            .map(r => r.map(c => (c ?? '').toString().trim()))
-            .filter(r => r[0] && r[1]) // 이름/학번 필수
-            .map(r => {
-              const name = r[0];
-              const studentId = r[1];
-              const third = r[2] || '';   // 과목 또는 동아리 하나만 들어옴
-              let subject = '';
-              let club = '';
-
-              if (third) {
-                // 과목 후보에 있으면 과목, 아니면 동아리로 분류
-                if (SUBJECT_CANDIDATES.includes(third)) subject = third;
-                else club = third;
-              }
-
-              return {
-                name,
-                studentId,
-                subject,
-                club,
-                username: studentId,
-                password: studentId
-              };
-            });
-
-          if (roster.length === 0) {
-            showMessage('유효한 행이 없습니다. (이름, 학번은 필수)', 'error');
-            return;
-          }
-
-          try {
-            const res = await fetch('/api/admin/import-students', {
-             method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ roster }) // 메타 없이 roster만 전송
-            });
-            const j = await res.json().catch(() => ({}));
-            if (!res.ok || !j.success) throw new Error(j?.error || `HTTP ${res.status}`);
-        
-            showMessage(
-              `명부가 저장되었습니다. (총 ${j.importedCount ?? j.imported?.length ?? roster.length}명)`,
-              'success'
-            );
-            closeRosterModal();
-            await loadStudentStatus();
-            await (typeof loadRosterList === 'function' ? loadRosterList() : Promise.resolve());
-          } catch (e) {
-            console.error('import-students 실패:', e);
-            showMessage(`서버 업로드 중 오류: ${e.message}`, 'error');
-          }
-        }
-
 
         // 테스트 데이터 생성 삭제
         function clearAllData() {
@@ -1399,11 +1345,13 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadStudentStatus();
             loadActivityList();
+            loadRosterList(); // ← 이 줄 추가
         });
     </script>
 </body>
 
 </html>
+
 
 
 
