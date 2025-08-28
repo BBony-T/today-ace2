@@ -647,7 +647,7 @@
             body: JSON.stringify(payload)
           });
           let j = {};
-          try { j = await res.json(); } catch (_) {}
+          try { j = await readJsonSafe(res); } catch (_) {}
           if (!res.ok || !j.success) {
             const msg = j?.error || res.statusText || `HTTP ${res.status}`;
             throw new Error(msg);
@@ -687,7 +687,7 @@
            async function loadRosterList() {
              try {
                const res = await fetch('/api/admin/list-students'); // 전체 학생
-               const j = await res.json();
+               const j = await readJsonSafe(res);
                if (!res.ok || !j.success) throw new Error(j.error || '조회 실패');
                const students = Array.isArray(j.students) ? j.students : [];
                renderRosterList(students);
@@ -741,7 +741,7 @@
         async function loadStudentStatus() {
           try {
             const res = await fetch('/api/admin/list-students'); // 전체
-            const j = await res.json();
+            const j = await readJsonSafe(res);
         
             if (!res.ok || !j.success) throw new Error(j.error || '조회 실패');
         
@@ -1369,7 +1369,7 @@
           let existingIds = new Set();
           try {
             const exRes = await fetch('/api/admin/list-students');
-            const ex = await exRes.json();
+            const ex = await exreadJsonSafe(res);
             if (exRes.ok && ex.success && Array.isArray(ex.students)) {
               existingIds = new Set(ex.students.map(s => (s.studentId || '').toString().trim()));
             }
@@ -1412,9 +1412,14 @@
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               // 서버가 중복을 건너뛰도록 힌트도 전달(서버에서 무시해도 무해)
-              body: JSON.stringify({ roster, skipExisting: true })
+              body: JSON.stringify({
+                  roster,
+                  skipExisting: true,
+                  categoryType,
+                  categoryName
+              })
             });
-            const j = await res.json().catch(() => ({}));
+            const j = await readJsonSafe(res).catch(() => ({}));
             if (!res.ok || !j.success) throw new Error(j?.error || `HTTP ${res.status}`);
 
             showMessage(`명부가 저장되었습니다. (총 ${j.importedCount ?? j.imported?.length ?? roster.length}명)`, 'success');
@@ -1483,19 +1488,19 @@
             loadActivityList();
             loadRosterList(); // ← 이 줄 추가
         });
+
+        // 서버 응답을 안전하게 JSON으로 읽기
+        async function readJsonSafe(res) {
+          const text = await res.text();
+          try {
+            return JSON.parse(text);
+          } catch {
+            // JSON 아님 → 원문을 에러로 던짐
+            throw new Error(text || `HTTP ${res.status}`);
+          }
+        }
     </script>
 </body>
 
 </html>
-
-
-
-
-
-
-
-
-
-
-
 
