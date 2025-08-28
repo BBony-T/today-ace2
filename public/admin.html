@@ -667,7 +667,7 @@
 
         function getUploadMeta() {
           const type = (document.querySelector('input[name="catType"]:checked')?.value) || 'subject';
-          const name = document.getElementById('catName')?.value?.trim() || '';
+          const name = document.getElementById('categoryName')?.value?.trim() || '';
           return { type, name };
         }
 
@@ -1244,7 +1244,6 @@
         }
 
         // 명부 관리 모달
-        let pendingRows = []; // [ [이름, 학번], ... ] 임시 보관
 
         // ✅ 교체: 모달 열기/닫기
         function showRosterModal() {
@@ -1254,9 +1253,6 @@
           if (nameBox) nameBox.value = '';
           document.getElementById('rosterModal').style.display = 'flex';
         }
-function closeRosterModal() {
-  document.getElementById('rosterModal').style.display = 'none';
-}
 
         function closeRosterModal() {
           document.getElementById('rosterModal').style.display = 'none';
@@ -1312,6 +1308,8 @@ function closeRosterModal() {
         //모달 닫기 삭
 
         // 파일 업로드 처리
+
+        // CSV/엑셀 모두 바이너리로 읽고 XLSX로 파싱(한글 CSV 인코딩 이슈 회피)
         function handleFileUpload(event) {
           const file = event.target.files?.[0];
           if (!file) return;
@@ -1319,14 +1317,10 @@ function closeRosterModal() {
           const reader = new FileReader();
           reader.onload = (e) => {
             try {
-              let rows;
-              if (file.name.toLowerCase().endsWith('.csv')) {
-                rows = parseCSV(String(e.target.result || ''));
-              } else {
-                const wb = XLSX.read(e.target.result, { type: 'binary' });
-                const firstSheet = wb.Sheets[wb.SheetNames[0]];
-                rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-              }
+              const bstr = e.target.result; // binary string
+              const wb = XLSX.read(bstr, { type: 'binary' }); // CSV/엑셀 모두 인식
+              const sh = wb.Sheets[wb.SheetNames[0]];
+              let rows = XLSX.utils.sheet_to_json(sh, { header: 1 });
 
               if (!rows || rows.length === 0) {
                 UP.preview = [];
@@ -1334,21 +1328,17 @@ function closeRosterModal() {
                 showMessage('파일에 데이터가 없습니다.', 'error');
                 return;
               }
-        
-              // 헤더 제거 감지
+
+              // 헤더 제거(이름, 학번)
               const first = String(rows[0].join(',')).replace(/\s/g,'');
               if (/(이름|name).*(학번|id)/i.test(first)) rows.shift();
 
-              // [이름, 학번]만 사용
+              // [이름, 학번]만, 파일 내부 중복(학번 기준) 제거
               const seen = new Set();
               UP.preview = rows
                 .map(r => r.map(c => (c ?? '').toString().trim()))
-                .filter(r => r[0] && r[1])                   // 이름/학번 필수
-                .filter(r => {                                // 파일 내부 중복 제거(학번 기준)
-                  const ok = !seen.has(r[1]);
-                  if (ok) seen.add(r[1]);
-                  return ok;
-                })
+                .filter(r => r[0] && r[1])
+                .filter(r => { const ok = !seen.has(r[1]); if (ok) seen.add(r[1]); return ok; })
                 .map(r => ({ name: r[0], studentId: r[1] }));
 
               renderPreview();
@@ -1361,13 +1351,9 @@ function closeRosterModal() {
             }
           };
 
-          if (file.name.toLowerCase().endsWith('.csv')) {
-            reader.readAsText(file, 'utf-8');
-          } else {
-            reader.readAsBinaryString(file);
-          }
+          // 항상 바이너리로 읽기(엑셀/CSV 공통)
+          reader.readAsBinaryString(file);
         }
-
 
         // CSV 파싱
         function parseCSV(text) {
@@ -1455,6 +1441,7 @@ function closeRosterModal() {
 </body>
 
 </html>
+
 
 
 
