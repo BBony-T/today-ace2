@@ -684,26 +684,69 @@
         });
       }
 
-      // ========= AI 조언(간단 로직 유지) =========
-      function updateAIAdvice(stats) {
-        let advice = '';
-        if (stats.totalEvaluations === 0) {
-          advice = '아직 친구들의 평가가 없네요! 더 많은 활동에 참여해보세요.';
-        } else {
-          const topSkill = stats.topCompetency;
-          advice = `🌟 축하해요! "${topSkill}" 분야에서 가장 많은 인정을 받았어요. `;
+      // ========= AI 조언(간단 로직 유지) 기존 삭제 =========
+      
+      // 통계 객체(stats)에서 간단 요약 문자열 만들기
+      function buildStatsSummary(stats) {
+        const lines = [];
+        const cc = stats.competencyCounts || {};
+        const pairs = Object.entries(cc).sort((a,b)=>b[1]-a[1]);
+        const top = stats.topCompetency || "-";
+        const total = stats.totalEvaluations || 0;
+        const days = stats.evaluationDays || 0;
 
-          if (topSkill === '자신감과 리더십')      advice += '리더십을 더욱 발전시키기 위해 팀원들의 의견을 더 많이 들어보세요.';
-          else if (topSkill === '분석')           advice += '뛰어난 분석력을 바탕으로 창의적인 아이디어도 제안해보세요.';
-          else if (topSkill === '아이디어 뱅크')   advice += '훌륭한 아이디어들을 현실로 만들어보는 실행력도 길러보세요.';
-          else if (topSkill === '감정 이해')       advice += '뛰어난 공감능력을 활용해 팀의 분위기 메이커 역할을 해보세요.';
-          else if (topSkill === '의사소통')         advice += '소통 능력을 바탕으로 팀 내 갈등 해결사 역할을 해보세요.';
-          else if (topSkill === '협동심')           advice += '팀워크를 중시하는 당신, 프로젝트 매니저 역할에 도전해보세요.';
-
-          advice += `\n\n📈 총 ${stats.totalEvaluations}번의 추천을 받았고, ${stats.evaluationDays}일 동안 꾸준히 참여했네요!`;
+        lines.push(`가장 많은 추천 역량: ${top}`);
+        lines.push(`총 추천 수: ${total}, 참여 일수: ${days}`);
+        if (pairs.length) {
+          const top3 = pairs.slice(0,3).map(([k,v])=>`${k} ${v}회`).join(", ");
+          lines.push(`상위 역량: ${top3}`);
         }
-        document.getElementById('aiAdvice').textContent = advice;
+        // 월별 추이 요약(있으면)
+        const months = Object.keys(stats.monthlyData || {}).sort();
+        if (months.length >= 2) {
+          const first = months[0], last = months[months.length-1];
+          const diff = (stats.monthlyData[last]||0) - (stats.monthlyData[first]||0);
+          lines.push(`첫달(${first})→마지막달(${last}) 변화: ${diff>=0?'+':''}${diff}`);
+        }
+        return lines.join('\n');
       }
+
+      async function updateAIAdvice(stats) {
+        const career = (localStorage.getItem('careerInterest') || '').trim();
+       const summary = buildStatsSummary(stats);
+
+        // 화면에 잠깐 로딩 메시지
+       const box = document.getElementById('aiAdvice');
+        box.textContent = 'AI 조언 생성 중...';
+
+        try {
+          const r = await fetch('/api/ai-advice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ career, statsSummary: summary })
+          });
+          const j = await r.json();
+          if (r.ok && j.success && j.advice) {
+            // 5줄 제한 보장(혹시 길게 왔을 때 잘라줌)
+            const lines = j.advice.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,5);
+            box.textContent = lines.join('\n');
+           return;
+          }
+          throw new Error(j.error || 'AI 실패');
+        } catch (e) {
+          console.warn('AI 조언 실패, 로컬 규칙으로 대체:', e);
+          // 🔁 실패 시 기존 로컬 로직(간단)으로 대체
+          let advice = '';
+          const top = stats.topCompetency || '-';
+          if (stats.totalEvaluations === 0) {
+            advice = '아직 친구들의 평가가 적어요. 활동에 더 자주 참여해보세요.\n작은 역할부터 맡아보면 추천이 늘어요.\n하루 1번 이상 협업/의사소통을 시도해보세요.';
+          } else {
+            advice = `강점은 "${top}"로 보입니다.\n${career ? `관심 진로(${career})와 연결해 강점을 실습으로 확장하세요.` : '관심 진로를 입력하면 더 정확한 조언이 제공돼요.'}\n이번 주에 강점이 드러나는 과제를 1개 선택해 주도적으로 시도하세요.\n활동 후 한 문장 회고로 개선점을 적어보세요.`;
+          }
+    // 5줄 이내로 제한
+          box.textContent = advice.split('\n').slice(0,5).join('\n');
+        }
+      }  
  
       // ========= 데이터 없음 표시 =========
       function showNoDataMessage() {
@@ -721,3 +764,4 @@
 </body>
 
 </html>
+
