@@ -604,13 +604,6 @@
 
         <!-- 2) 파일 선택 -->
         <div class="file-upload" onclick="document.getElementById('csvFile').click()">
-          <div style="display:flex; gap:14px; align-items:center; justify-content:center; margin-bottom:10px;">
-            <label><input type="radio" name="catType" id="catSubject" value="subject" checked> 과목</label>
-            <label><input type="radio" name="catType" id="catClub" value="club"> 동아리</label>
-            <input id="catName" type="text" placeholder="카테고리 이름" 
-                   style="flex:0 1 180px; padding:8px 10px; border:2px solid #ffd93d; border-radius:8px;">
-          </div>
-
           <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event)">
           <div>📁 CSV 또는 Excel 파일을 선택하세요</div>
           <div style="font-size:12px; color:#666; margin-top:5px;">
@@ -1253,64 +1246,21 @@
         // 명부 관리 모달
         let pendingRows = []; // [ [이름, 학번], ... ] 임시 보관
 
+        // ✅ 교체: 모달 열기/닫기
         function showRosterModal() {
-          pendingRows = [];
-          document.getElementById('uploadPreview').textContent = '파일을 선택하면 여기 미리보기가 표시됩니다.';
-          document.getElementById('saveRosterBtn').disabled = true;
-          document.getElementById('categoryName').value = '';
+          UP.preview = [];
+          renderPreview(); // "파일을 선택하면…" 문구로 초기화 + 저장 비활성화
+          const nameBox = document.getElementById('categoryName');
+          if (nameBox) nameBox.value = '';
           document.getElementById('rosterModal').style.display = 'flex';
         }
+function closeRosterModal() {
+  document.getElementById('rosterModal').style.display = 'none';
+}
+
         function closeRosterModal() {
           document.getElementById('rosterModal').style.display = 'none';
-        }
-
-        // 파일 읽기 → 미리보기만 (저장은 버튼으로)
-        function handleFileUpload(e) {
-          const file = e.target.files[0];
-          if (!file) return;
-
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            try {
-              let rows;
-              if (file.name.endsWith('.csv')) {
-                rows = parseCSV(ev.target.result);
-              } else {
-                const wb = XLSX.read(ev.target.result, { type: 'binary' });
-                const sh = wb.Sheets[wb.SheetNames[0]];
-                rows = XLSX.utils.sheet_to_json(sh, { header: 1 });
-              }
-              // 헤더 제거
-              const first = String(rows[0]?.join(',') || '').replace(/\s/g, '');
-              if (/(이름|name).*(학번|id)/i.test(first)) rows.shift();
-
-              // 이름/학번만
-              pendingRows = rows
-                .map(r => [ (r[0]||'').toString().trim(), (r[1]||'').toString().trim() ])
-                .filter(r => r[0] && r[1]);
-
-              const preview = document.getElementById('uploadPreview');
-              if (!pendingRows.length) {
-                preview.innerHTML = '<span style="color:#c53030;">유효한 행이 없습니다. (이름/학번 필수)</span>';
-                document.getElementById('saveRosterBtn').disabled = true;
-                return;
-              }
-              const sample = pendingRows.slice(0, 5).map(r => `${r[0]} (${r[1]})`).join('<br>');
-              preview.innerHTML = `
-                <div>읽은 행: <strong>${pendingRows.length}</strong>개</div>
-                <div style="margin-top:6px; color:#666;">샘플</div>
-                <div style="font-size:12px; color:#2d3748; margin-top:4px;">${sample}</div>
-              `;
-              document.getElementById('saveRosterBtn').disabled = false;
-            } catch (err) {
-             console.error('파일 처리 오류:', err);
-              showMessage('파일 형식이 올바르지 않습니다.', 'error');
-              document.getElementById('saveRosterBtn').disabled = true;
-            }
-          };
-          if (file.name.endsWith('.csv')) reader.readAsText(file, 'utf-8');
-          else reader.readAsBinaryString(file);
-        }
+        } 
 
         // 저장 버튼 → 서버 업로드 (skipExisting: true)
         async function saveRoster() {
@@ -1432,78 +1382,7 @@
         // 명부 데이터 처리(서버 업로드)
         // CSV/엑셀: [이름, 학번, 과목/동아리]
         // CSV/엑셀: [이름, 학번, 과목/동아리]
-        async function processRosterData(rows) {
-          if (!rows || rows.length === 0) {
-            showMessage('파일에 데이터가 없습니다.', 'error');
-            return;
-          }
 
-          // 1) 서버에 이미 있는 학번 집합
-          let existingIds = new Set();
-          try {
-            const exRes = await fetch('/api/admin/list-students');
-            const ex = await exreadJsonSafe(res);
-            if (exRes.ok && ex.success && Array.isArray(ex.students)) {
-              existingIds = new Set(ex.students.map(s => (s.studentId || '').toString().trim()));
-            }
-          } catch (_) {}
-
-          // 2) 헤더 감지 후 제거
-          const firstLine = String(rows[0].join(',')).replace(/\s/g, '');
-          if (/(이름|name).*(학번|id)/i.test(firstLine)) rows.shift();
-
-          // 3) 파싱 + 파일 내부 중복 제거 + 서버 기존 학번 제외
-          const seen = new Set();
-          const roster = rows
-            .map(r => r.map(c => (c ?? '').toString().trim()))
-            .filter(r => r[0] && r[1])                             // 이름/학번 필수
-            .filter(r => {                                         // 파일 내부 중복 제거
-              const ok = !seen.has(r[1]);
-              if (ok) seen.add(r[1]);
-              return ok;
-            })
-            .filter(r => !existingIds.has(r[1]))                   // 서버에 이미 있던 학번 제외
-            .map(r => {
-              const name = r[0];
-              const studentId = r[1];
-              const third = r[2] || '';                            // 과목 또는 동아리
-              let subject = '', club = '';
-              if (third) {
-                if (SUBJECT_CANDIDATES.includes(third)) subject = third;
-               else club = third;
-              }
-              return { name, studentId, subject, club, username: studentId, password: studentId };
-            });
-
-          if (roster.length === 0) {
-            showMessage('새로 추가할 학생이 없습니다. (이미 등록된 학번이거나 유효한 행이 없음)', 'error');
-            return;
-          }
-
-          try {
-            const res = await fetch('/api/admin/import-students', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              // 서버가 중복을 건너뛰도록 힌트도 전달(서버에서 무시해도 무해)
-              body: JSON.stringify({
-                  roster,
-                  skipExisting: true,
-                  categoryType,
-                  categoryName
-              })
-            });
-            const j = await readJsonSafe(res).catch(() => ({}));
-            if (!res.ok || !j.success) throw new Error(j?.error || `HTTP ${res.status}`);
-
-            showMessage(`명부가 저장되었습니다. (총 ${j.importedCount ?? j.imported?.length ?? roster.length}명)`, 'success');
-            closeRosterModal();
-            await loadStudentStatus();
-            await loadRosterList();
-          } catch (e) {
-            console.error('import-students 실패:', e);
-            showMessage(`서버 업로드 중 오류: ${e.message}`, 'error');
-          }
-        }
 
 
         // 테스트 데이터 생성 삭제
@@ -1576,5 +1455,6 @@
 </body>
 
 </html>
+
 
 
