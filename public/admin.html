@@ -728,21 +728,12 @@
         // 엑셀 양식 
         // 엑셀/CSV 업로드용 양식 다운로드 (이름, 학번, 과목/동아리)
         function downloadTemplate() {
-          const csv = [
-            '이름,학번,과목/동아리',
-            '홍길동,20250001,국어',
-            '김나래,20250002,코딩클럽'
-          ].join('\n');
-
+          const csv = ['이름,학번', '홍길동,20250001', '김나래,20250002'].join('\n');
           const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
-          a.href = url;
-          a.download = '명부_양식.csv';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+          a.href = url; a.download = '명부_양식.csv'; document.body.appendChild(a);
+          a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
         }
 
         
@@ -1214,13 +1205,110 @@
         }
 
         // 명부 관리 모달
+        let pendingRows = []; // [ [이름, 학번], ... ] 임시 보관
+
         function showRosterModal() {
-            document.getElementById('rosterModal').style.display = 'flex';
+          pendingRows = [];
+          document.getElementById('uploadPreview').textContent = '파일을 선택하면 여기 미리보기가 표시됩니다.';
+          document.getElementById('saveRosterBtn').disabled = true;
+          document.getElementById('categoryName').value = '';
+          document.getElementById('rosterModal').style.display = 'flex';
+        }
+        function closeRosterModal() {
+          document.getElementById('rosterModal').style.display = 'none';
         }
 
-        function closeRosterModal() {
-            document.getElementById('rosterModal').style.display = 'none';
+        // 파일 읽기 → 미리보기만 (저장은 버튼으로)
+        function handleFileUpload(e) {
+          const file = e.target.files[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            try {
+              let rows;
+              if (file.name.endsWith('.csv')) {
+                rows = parseCSV(ev.target.result);
+              } else {
+                const wb = XLSX.read(ev.target.result, { type: 'binary' });
+                const sh = wb.Sheets[wb.SheetNames[0]];
+                rows = XLSX.utils.sheet_to_json(sh, { header: 1 });
+              }
+              // 헤더 제거
+              const first = String(rows[0]?.join(',') || '').replace(/\s/g, '');
+              if (/(이름|name).*(학번|id)/i.test(first)) rows.shift();
+
+              // 이름/학번만
+              pendingRows = rows
+                .map(r => [ (r[0]||'').toString().trim(), (r[1]||'').toString().trim() ])
+                .filter(r => r[0] && r[1]);
+
+              const preview = document.getElementById('uploadPreview');
+              if (!pendingRows.length) {
+                preview.innerHTML = '<span style="color:#c53030;">유효한 행이 없습니다. (이름/학번 필수)</span>';
+                document.getElementById('saveRosterBtn').disabled = true;
+                return;
+              }
+              const sample = pendingRows.slice(0, 5).map(r => `${r[0]} (${r[1]})`).join('<br>');
+              preview.innerHTML = `
+                <div>읽은 행: <strong>${pendingRows.length}</strong>개</div>
+                <div style="margin-top:6px; color:#666;">샘플</div>
+                <div style="font-size:12px; color:#2d3748; margin-top:4px;">${sample}</div>
+              `;
+              document.getElementById('saveRosterBtn').disabled = false;
+            } catch (err) {
+             console.error('파일 처리 오류:', err);
+              showMessage('파일 형식이 올바르지 않습니다.', 'error');
+              document.getElementById('saveRosterBtn').disabled = true;
+            }
+          };
+          if (file.name.endsWith('.csv')) reader.readAsText(file, 'utf-8');
+          else reader.readAsBinaryString(file);
         }
+
+        // 저장 버튼 → 서버 업로드 (skipExisting: true)
+        async function saveRoster() {
+          const catType = (document.querySelector('input[name="catType"]:checked')?.value) || 'subject';
+          const catName = document.getElementById('categoryName').value.trim();
+
+          if (!pendingRows.length) return showMessage('먼저 파일을 선택하세요.', 'error');
+          if (!catName) return showMessage('카테고리 이름을 입력하세요.', 'error');
+
+          // 파일 내부 중복 학번 제거
+          const seen = new Set();
+          const roster = pendingRows
+            .filter(([name, studentId]) => {
+              if (seen.has(studentId)) return false;
+              seen.add(studentId);
+              return true;
+            })
+            .map(([name, studentId]) => ({
+              name, studentId,
+              username: studentId,
+              password: studentId,
+              subject: catType === 'subject' ? catName : '',
+              club:    catType === 'club'    ? catName : ''
+            }));
+
+          try {
+            const j = await postJson('/api/admin/import-students', { roster, skipExisting: true });
+            showMessage(
+              `저장 완료! 새로 추가: ${j.importedCount ?? 0}명` +
+              (j.updatedCount ? `, 업데이트: ${j.updatedCount}명` : '') +
+              (j.skippedCount ? `, 건너뜀: ${j.skippedCount}명` : ''),
+              'success'
+            );
+            closeRosterModal();
+            await loadStudentStatus();
+            await loadRosterList();
+          } catch (e) {
+            console.error('업로드 실패:', e);
+            showMessage(`서버 업로드 오류: ${e.message}`, 'error');
+          }
+        }
+
+
+        //모달 닫기 삭
 
         // 파일 업로드 처리
         function handleFileUpload(event) {
@@ -1399,6 +1487,7 @@
 </body>
 
 </html>
+
 
 
 
