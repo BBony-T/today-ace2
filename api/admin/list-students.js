@@ -9,14 +9,12 @@ export default async function handler(req, res) {
     }
 
     const col = db().collection('students');
+    const snap = await col.get(); // ✅ 오타 수정
 
-    // 전부 가져오되, 필요하면 나중에 쿼리 조건 추가 가능
-    const snap = await col.get();
     const students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
     return res.status(200).json({ success: true, students });
   } catch (e) {
-    console.error('list-students 오류:', e);
-    return res.status(500).json({ success: false, error: e?.message || '서버 오류' });
+    console.error('[list-students] error:', e);
+    return res.status(500).json({ success: false, error: e?.message || 'server error' }); // ✅ JSON 보장
   }
 }
