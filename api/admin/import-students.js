@@ -7,7 +7,11 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') {
       return res.status(405).json({ success: false, error: 'Method Not Allowed' });
     }
+    // POST 분기 바로 아래
+    const ct = req.headers['content-type'];
+    console.log('[import-students] content-type =', ct, ', typeof req.body =', typeof req.body);
 
+    
     // 본문 파싱 안전 처리
     let bodyRaw = req.body;
     if (typeof bodyRaw === 'string') {
