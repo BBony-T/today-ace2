@@ -2,17 +2,18 @@
   "name": "today-ace",
   "version": "1.0.0",
   "description": "오늘의 에이스는? - 동료평가/자기평가 웹사이트",
+  "private": true,
   "type": "module",
   "engines": { "node": ">=18" },
   "scripts": {
-    "build": "",
-    "start": "",
-    "dev": ""
+    "build": "echo \"no build\""
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
     "firebase-admin": "^12.5.0",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cookie": "^0.6.0"
   },
   "keywords": [
     "education",
@@ -27,13 +28,3 @@
     "url": "https://github.com/BBony-T/today-ace2.git"
   }
 }
-{
-  "dependencies": {
-    "firebase-admin": "^12.5.0",
-    "jsonwebtoken": "^9.0.2",
-    "cookie": "^0.6.0"
-  }
-}
-
-
-
