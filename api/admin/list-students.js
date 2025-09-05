@@ -4,52 +4,55 @@ import { getUserFromReq } from '../_shared/initAdmin.js';
 
 export default async function handler(req, res) {
   try {
-    if (req.method !== 'GET') return res.status(405).json({ success:false, error:'Method Not Allowed' });
+    if (req.method !== 'GET') {
+      return res.status(405).json({ success:false, error:'Method Not Allowed' });
+    }
 
     const me = getUserFromReq(req);
     const teacherId =
-      (me && (me.role === 'super' && req.query.teacherId ? req.query.teacherId : (me.teacherId || me.uid))) ||
-      req.query.teacherId ||
-      'T_DEFAULT';
+      (me && (me.role === 'super' && req.query.teacherId ? req.query.teacherId : (me.teacherId || me.uid)))
+      || req.query.teacherId
+      || 'T_DEFAULT';
 
     const onlyActive = req.query.onlyActive === '1' || req.query.active === '1';
 
-    // 활성 rosterIds
-    let rosterAllow = null; // null: 전체, []: 없음, [ids]: 활성만
+    let active = null;
     if (onlyActive) {
       const board = await db().collection('boards').doc(teacherId).get();
-      rosterAllow = board.exists ? (board.data().activeRosterIds || []) : [];
-      if (rosterAllow.length === 0) {
+      active = board.exists ? (board.data().activeRosterIds || []) : [];
+      if (active.length === 0) {
+        res.setHeader('Cache-Control', 'no-store');
         return res.status(200).json({ success:true, students: [] });
       }
     }
 
-    // 쿼리 구성
-    let students = [];
     const col = db().collection('students');
+    const chunks = [];
+    const ids = active || [null]; // active 지정 없으면 한 번만
 
-    if (Array.isArray(rosterAllow)) {
-      // 활성만
-      for (let i = 0; i < rosterAllow.length; i += 10) {
-        const ids = rosterAllow.slice(i, i + 10);
-        const qs = await col
-          .where('teacherId','==',teacherId)
-          .where('enabled','==',true)
-          .where('rosterId','in',ids)
-          .get();
-        students.push(...qs.docs.map(d => ({ id:d.id, ...d.data() })));
-      }
+    // Firestore in 제한(10개) 대응
+    if (active) {
+      for (let i=0;i<active.length;i+=10) chunks.push(active.slice(i,i+10));
     } else {
-      // 전체 조회(관리 화면의 요약 등에서 필요하면 사용)
-      const qs = await col.where('teacherId','==',teacherId).get();
-      students = qs.docs.map(d => ({ id:d.id, ...d.data() }));
+      chunks.push(null);
     }
 
-    // studentId 기준 dedupe
+    let students = [];
+    for (const part of chunks) {
+      let q = col.where('teacherId','==',teacherId);
+      if (onlyActive) q = q.where('enabled','==',true);
+      if (part) q = q.where('rosterId','in',part);
+      const qs = await q.get();
+      students.push(...qs.docs.map(d => ({ id: d.id, ...d.data() })));
+    }
+
+    // studentId 중복 제거
     const map = new Map();
     for (const s of students) if (!map.has(s.studentId)) map.set(s.studentId, s);
+    const list = Array.from(map.values());
 
-    return res.status(200).json({ success:true, students: Array.from(map.values()) });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ success:true, students: list });
   } catch (e) {
     console.error('[list-students] error:', e);
     return res.status(500).json({ success:false, error: e?.message || 'server error' });
