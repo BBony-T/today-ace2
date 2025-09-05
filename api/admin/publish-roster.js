@@ -3,57 +3,66 @@ import { db } from '../_fb.js';
 import admin from 'firebase-admin';
 import { getUserFromReq } from '../_shared/initAdmin.js';
 
-export default async function handler(req,res){
-  try{
-    if (req.method !== 'POST') return res.status(405).json({ success:false, error:'Method Not Allowed' });
-
-    const me = getUserFromReq(req);
-    if (!me || (me.role !== 'teacher' && me.role !== 'super')) {
-      // 로그인 붙이기 전까지 임시 허용하려면, 아래 한 줄만 남겨도 됩니다.
-      // return res.status(401).json({ success:false, error:'로그인 필요' });
+export default async function handler(req, res) {
+  try {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ success: false, error: 'Method Not Allowed' });
     }
 
-    // 최종 teacherId 계산 (수퍼는 ?teacherId= 로 임의 전환 가능)
-    const teacherId =
-      (me && (me.role === 'super' && req.query.teacherId ? req.query.teacherId : (me.teacherId || me.uid)))
-      || req.query.teacherId      // ← 로그인 붙이기 전 임시 fallback
-      || 'T_DEFAULT';             // ← 마지막 안전값(개발용)
-
-    let { rosterId, publish } = (typeof req.body === 'string') ? JSON.parse(req.body) : req.body;
+    // 본문 안전 파싱
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    let { rosterId, publish = true, teacherId: teacherIdFromBody } = body;
     publish = !!publish;
+    if (!rosterId) return res.status(400).json({ success:false, error:'rosterId 필요' });
 
-    // 1) boards.activeRosterIds 업데이트
+    const me = getUserFromReq(req) || {};
+
+    // ✅ teacherId 규칙을 import/list와 동일하게 통일 (email 우선)
+    // - 수퍼는 body.teacherId 있으면 그걸로 위임 가능
+    const teacherId =
+      (me.role === 'super' && teacherIdFromBody) ||
+      me.email || me.teacherId || me.uid || 'T_DEFAULT';
+
+    // (안전) roster 소유 확인 – 교차 게시 방지
+    const rSnap = await db().collection('rosters').doc(rosterId).get();
+    if (!rSnap.exists) return res.status(404).json({ success:false, error:'roster 없음' });
+    const rData = rSnap.data();
+    if (rData.teacherId !== teacherId && me.role !== 'super') {
+      return res.status(403).json({ success:false, error:'권한 없음' });
+    }
+
+    // 1) boards/{teacherId}.activeRosterIds 업데이트
     const boardRef = db().collection('boards').doc(teacherId);
     await db().runTransaction(async (tx) => {
       const cur = await tx.get(boardRef);
-      let arr = cur.exists ? (cur.data().activeRosterIds || []) : [];
-      arr = new Set(arr);
+      const arr = new Set(cur.exists ? (cur.data().activeRosterIds || []) : []);
       publish ? arr.add(rosterId) : arr.delete(rosterId);
-      tx.set(boardRef, { activeRosterIds: Array.from(arr), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      tx.set(
+        boardRef,
+        {
+          teacherId,
+          activeRosterIds: Array.from(arr),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: cur.exists ? (cur.data().createdAt || admin.firestore.FieldValue.serverTimestamp())
+                                : admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
     });
 
-    // 2) students/users enabled 토글
-    const studentsCol = db().collection('students');
-    const usersCol    = db().collection('users');
-    const q = await studentsCol.where('teacherId','==',teacherId).where('rosterId','==',rosterId).get();
+    // 2) rosters/{rosterId}.published 동기화
+    await db().collection('rosters').doc(rosterId).set(
+      { published: publish, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      { merge: true }
+    );
 
-    let batch = db().batch(); let ops = 0; let count = 0;
-    for (const doc of q.docs) {
-      batch.update(doc.ref, { enabled: publish, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-      const stu = doc.data(); // { studentId }
-      const key = `${teacherId}:${stu.studentId}`;
-      batch.set(usersCol.doc(key), { enabled: publish, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge:true });
-      if (++ops >= 450) { await batch.commit(); batch = db().batch(); ops=0; }
-      count++;
-    }
-    if (ops > 0) await batch.commit();
+    // 💡 학생/유저 enabled 토글은 제거함
+    // (현재 students 문서에 rosterId가 없어서 쿼리가 항상 0건이기 때문)
+    // 나중에 필요하면 import 단계에서 학생-명부 매핑 구조를 설계한 뒤 추가하세요.
 
-    // 3) rosters.published 상태도 동기화(선택)
-    await db().collection('rosters').doc(rosterId).set({ published: publish, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge:true });
-
-    return res.status(200).json({ success:true, affected: count, publish });
-  }catch(e){
+    return res.status(200).json({ success: true, publish });
+  } catch (e) {
     console.error('[publish-roster] error', e);
-    return res.status(500).json({ success:false, error:e?.message || 'server error' });
+    return res.status(500).json({ success:false, error: e?.message || 'server error' });
   }
 }
