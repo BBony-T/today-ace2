@@ -1,82 +1,68 @@
 // /api/admin/import-students.js
 import { db } from '../_fb.js';
-import admin from 'firebase-admin';
 import { getUserFromReq } from '../_shared/initAdmin.js';
 
 export default async function handler(req, res) {
   try {
-    if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ success:false, error:'Method Not Allowed' });
 
     const me = getUserFromReq(req);
     const teacherId =
-      (me && (me.role === 'super' && req.query.teacherId ? req.query.teacherId : (me.teacherId || me.uid))) ||
-      req.query.teacherId ||
-      'T_DEFAULT';
+      (me && (me.teacherId || me.uid)) ||
+      req.query.teacherId || req.body.teacherId || 'T_DEFAULT';
 
-    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const rows = Array.isArray(body.roster) ? body.roster
-               : (Array.isArray(body.students) ? body.students : []);
-    if (!rows.length) return res.status(400).json({ success:false, error:'업로드 데이터가 비어있습니다.' });
+    const { categoryType = 'subject', categoryName = '무제 명부', skipExisting = true } = req.body || {};
+    const incoming = Array.isArray(req.body.roster) ? req.body.roster
+                   : Array.isArray(req.body.students) ? req.body.students : [];
+    if (incoming.length === 0) return res.status(400).json({ success:false, error:'명부가 비어있습니다.' });
 
-    const catType = body.categoryType || body.type || '';
-    const catName = body.categoryName || body.name || '';
-    // 혹시 비어있으면 데이터에서 유추
-    const first = rows.find(r => r.subject || r.club);
-    const derivedName = first?.subject || first?.club || '';
-    const title = (catName || derivedName || '무제 명부');
-
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    // 1) roster 문서 생성
     const rosterRef = db().collection('rosters').doc();
-    const rosterId  = rosterRef.id;
-
+    const rosterId = rosterRef.id;
     await rosterRef.set({
-      type: 'roster',
+      id: rosterId,
       teacherId,
-      title,
-      categoryType: catType || (first?.subject ? 'subject' : first?.club ? 'club' : ''),
-      categoryName: catName || derivedName || '',
-      itemCount: 0,
-      published: false,
-      createdAt: now,
-      updatedAt: now,
-    }, { merge: true });
+      title: categoryName,
+      type: categoryType,              // 'subject' | 'club'
+      itemCount: incoming.length,
+      createdAt: Date.now(),
+      active: false,                   // 표시는 publish-roster에서
+    });
 
-    // 학생 저장(처음에는 enabled=false)
-    const studentsCol = db().collection('students');
-    let batch = db().batch();
-    let ops = 0, imported = 0;
+    // 2) students 저장 (enabled는 기본 false)
+    const col = db().collection('students');
+    let batch = db().batch(), cnt = 0, imported = 0;
 
-    for (const r of rows) {
-      const name = (r.name || r['이름'] || '').toString().trim();
-      const sid  = (r.username || r.studentId || r.id || r['학번'] || '').toString().trim();
-      if (!name || !sid) continue;
+    for (const s of incoming) {
+      const name = (s.name || '').trim();
+      const studentId = String(s.studentId || s.username || '').trim();
+      if (!name || !studentId) continue;
 
-      const docRef = studentsCol.doc(sid);
-      batch.set(docRef, {
+      // 교사별-학번 고유키로 저장(중복 방지)
+      const docId = `${teacherId}_${studentId}`;
+      const ref = col.doc(docId);
+
+      const data = {
         teacherId,
         rosterId,
-        enabled: false,
-        username: sid,
-        password: name,
         name,
-        studentId: sid,
-        subject: (catType === 'subject') ? (catName || derivedName) : (r.subject || ''),
-        club:    (catType === 'club')    ? (catName || derivedName) : (r.club    || ''),
-        createdAt: now,
-        updatedAt: now,
-      }, { merge: true });
+        studentId,
+        subject: categoryType === 'subject' ? categoryName : '',
+        club:    categoryType === 'club'    ? categoryName : '',
+        enabled: false,                     // 현황판 노출X (publish로 전환)
+        status: 'not-started',
+        updatedAt: Date.now(),
+      };
 
-      imported++; ops++;
-      if (ops >= 450) { await batch.commit(); batch = db().batch(); ops = 0; }
+      batch.set(ref, data, { merge: !!skipExisting });
+      imported++; cnt++;
+      if (cnt % 400 === 0) { await batch.commit(); batch = db().batch(); }
     }
-    if (ops > 0) await batch.commit();
-
-    await rosterRef.set({ itemCount: imported, updatedAt: now }, { merge: true });
+    await batch.commit();
 
     return res.status(200).json({ success:true, rosterId, importedCount: imported });
   } catch (e) {
     console.error('[import-students] error:', e);
-    return res.status(500).json({ success:false, error: e?.message || 'server error' });
+    return res.status(500).json({ success:false, error:e?.message || 'server error' });
   }
 }
