@@ -1,153 +1,206 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>오늘의 에이스는?</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Arial', sans-serif; background-color: #fff8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-        body::before { content: ''; position: absolute; top: -50px; left: -50px; width: 150px; height: 150px; background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20 50 L35 25 L65 25 L80 50 L65 75 L35 75 Z" fill="%23ffd93d" stroke="none"/></svg>'); background-size: contain; background-repeat: no-repeat; opacity: 0.6; z-index: 0; }
-        body::after { content: ''; position: absolute; bottom: -30px; right: -30px; width: 120px; height: 120px; background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 10 C70 20, 90 40, 80 60 C70 80, 30 80, 20 60 C10 40, 30 20, 50 10 Z" fill="%23c77dff" stroke="none"/></svg>'); background-size: contain; background-repeat: no-repeat; opacity: 0.5; z-index: 0; }
-        .login-container { background: white; padding: 40px; border-radius: 25px; box-shadow: 0 20px 40px rgba(255, 217, 61, 0.2); width: 100%; max-width: 420px; text-align: center; position: relative; z-index: 1; border: 3px solid #ffe0b3; }
-        .logo { margin-bottom: 30px; }
-        .logo h1 { color: #2d3748; font-size: 32px; font-weight: bold; margin-bottom: 10px; }
-        .logo p { color: #4a5568; font-size: 16px; font-weight: 500; }
-        .input-group { margin-bottom: 20px; text-align: left; }
-        .input-group label { display: block; color: #2d3748; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
-        .input-group input { width: 100%; padding: 15px; border: 2px solid #ffd93d; border-radius: 15px; font-size: 16px; transition: all 0.3s ease; background: #fffef7; }
-        .input-group input:focus { outline: none; border-color: #ffb700; box-shadow: 0 0 0 3px rgba(255, 217, 61, 0.2); background: white; }
-        .login-button { width: 100%; background-color: #ffd93d; color: #2d3748; border: none; padding: 16px; border-radius: 15px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.3s ease; margin-top: 10px; }
-        .login-button:hover { transform: translateY(-2px); box-shadow: 0 15px 30px rgba(255, 217, 61, 0.4); background-color: #ffb700; }
-        .login-button:active { transform: translateY(0); }
-        .demo-accounts { margin-top: 30px; padding: 20px; background-color: #fff5e6; border-radius: 15px; text-align: left; border: 2px solid #ffe0b3; }
-        .demo-accounts h3 { color: #2d3748; margin-bottom: 15px; font-size: 16px; font-weight: 600; }
-        .demo-account { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 14px; color: #4a5568; cursor: pointer; padding: 8px; border-radius: 8px; transition: all 0.2s ease; font-weight: 500; }
-        .demo-account:hover { background-color: #ffd93d; transform: translateX(5px); color: #2d3748; }
-        .demo-account:last-child { margin-bottom: 0; }
-        .status-message { margin-top: 15px; padding: 10px; border-radius: 8px; font-size: 14px; display: none; }
-        .success { background-color: #e6fffa; color: #234e52; border: 2px solid #81e6d9; }
-        .error { background-color: #ffe6e6; color: #c53030; border: 2px solid #fc8181; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>오늘의 에이스는? - 로그인</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Arial', sans-serif; background-color:#fff8f0;
+      min-height:100vh; display:flex; align-items:center; justify-content:center;
+      position:relative; overflow:hidden;
+    }
+    /* 장식 배경 (기존 테마 유지) */
+    body::before{
+      content:''; position:absolute; top:-50px; left:-50px; width:150px; height:150px;
+      background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20 50 L35 25 L65 25 L80 50 L65 75 L35 75 Z" fill="%23ffd93d"/></svg>');
+      background-size:contain; background-repeat:no-repeat; opacity:.6; z-index:0;
+    }
+    body::after{
+      content:''; position:absolute; bottom:-30px; right:-30px; width:120px; height:120px;
+      background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 10 C70 20, 90 40, 80 60 C70 80, 30 80, 20 60 C10 40, 30 20, 50 10 Z" fill="%23c77dff"/></svg>');
+      background-size:contain; background-repeat:no-repeat; opacity:.5; z-index:0;
+    }
+
+    .login-container{
+      background:#fff; padding:40px 28px 30px; border-radius:25px;
+      box-shadow:0 20px 40px rgba(255,217,61,.2);
+      width:100%; max-width:460px; text-align:center; position:relative; z-index:1;
+      border:3px solid #ffe0b3;
+    }
+    .logo{ margin-bottom:18px; }
+    .logo h1{ color:#2d3748; font-size:32px; font-weight:bold; margin-bottom:6px; }
+    .logo p{ color:#4a5568; font-size:15px; font-weight:500; }
+
+    /* 탭 */
+    .tabs{ display:flex; gap:8px; justify-content:center; margin:14px 0 18px; }
+    .tab{
+      flex:1; background:#fffef7; border:2px solid #ffd93d; color:#4a5568;
+      padding:10px 12px; border-radius:999px; font-weight:700; cursor:pointer;
+      transition:.2s; user-select:none;
+    }
+    .tab:hover{ background:#fff3bf; }
+    .tab.on{
+      background:#ffd93d; color:#2d3748;
+      box-shadow:0 10px 20px rgba(255,217,61,.35);
+    }
+
+    .input-group{ margin-bottom:16px; text-align:left; }
+    .input-group label{ display:block; color:#2d3748; font-weight:600; margin-bottom:8px; font-size:14px; }
+    .input-group input{
+      width:100%; padding:14px; border:2px solid #ffd93d; border-radius:15px; font-size:16px;
+      transition:.25s; background:#fffef7;
+    }
+    .input-group input:focus{
+      outline:none; border-color:#ffb700; box-shadow:0 0 0 3px rgba(255,217,61,.2); background:#fff;
+    }
+    .login-button{
+      width:100%; background:#ffd93d; color:#2d3748; border:none; padding:16px;
+      border-radius:15px; font-size:16px; font-weight:700; cursor:pointer; transition:.25s; margin-top:6px;
+    }
+    .login-button:hover{ transform:translateY(-2px); box-shadow:0 15px 30px rgba(255,217,61,.4); background:#ffb700; }
+    .login-button:active{ transform:translateY(0); }
+
+    .helper-row{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:14px; }
+    .link{ color:#6c5ce7; text-decoration:none; font-weight:700; }
+    .link:hover{ text-decoration:underline; }
+
+    .status-message{
+      margin-top:14px; padding:10px; border-radius:10px; font-size:14px; display:none; border:2px solid transparent;
+    }
+    .success{ background:#e6fffa; color:#234e52; border-color:#81e6d9; }
+    .error{ background:#ffe6e6; color:#c53030; border-color:#fc8181; }
+
+    .hint{ color:#6b7280; font-size:12px; margin-top:6px; text-align:left; }
+    @media (max-width:420px){ .logo h1{font-size:28px;} .tabs{gap:6px;} .tab{padding:9px 10px; font-size:14px;} }
+  </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="logo">
-            <h1>🌟 오늘의 에이스는?</h1>
-            <p>따뜻한 마음으로 함께 성장해요!</p>
-        </div>
-
-        <form id="loginForm">
-            <div class="input-group">
-                <label for="username">아이디</label>
-                <input type="text" id="username" name="username" placeholder="아이디를 입력하세요" required>
-            </div>
-
-            <div class="input-group">
-                <label for="password">비밀번호</label>
-                <input type="password" id="password" name="password" placeholder="비밀번호를 입력하세요" required>
-            </div>
-
-            <button type="submit" class="login-button">로그인</button>
-        </form>
-
-        <div class="status-message" id="statusMessage"></div>
-
-        <div class="demo-accounts">
-            <h3>📝 데모 계정</h3>
-            <div class="demo-account"><span><strong>학생:</strong> student1</span><span>pass123</span></div>
-            <div class="demo-account"><span><strong>관리자:</strong> admin</span><span>admin123</span></div>
-        </div>
+  <div class="login-container">
+    <div class="logo">
+      <h1>🌟 오늘의 에이스는?</h1>
+      <p>따뜻한 마음으로 함께 성장해요!</p>
     </div>
 
-    <script>
-      function showMessage(message, type) {
-        const box = document.getElementById('statusMessage');
-        box.textContent = message;
-        box.className = `status-message ${type}`;
-        box.style.display = 'block';
-        if (type === 'error') setTimeout(() => (box.style.display = 'none'), 3000);
-      }
-      function setLoading(on) {
-        const btn = document.querySelector('.login-button');
-        btn.disabled = on;
-        btn.textContent = on ? '로그인 중...' : '로그인';
-      }
-      document.querySelectorAll('.demo-account').forEach((el) => {
-        el.addEventListener('click', () => {
-          const t = el.textContent;
-          if (t.includes('student1')) {
-            document.getElementById('username').value = 'student1';
-            document.getElementById('password').value = 'pass123';
-          } else if (t.includes('admin')) {
-            document.getElementById('username').value = 'admin';
-            document.getElementById('password').value = 'admin123';
+    <!-- 탭 -->
+    <div class="tabs">
+      <div id="tabT" class="tab on">선생님 · 수퍼</div>
+      <div id="tabS" class="tab">학생</div>
+    </div>
+
+    <!-- 선생님/수퍼 -->
+    <form id="formT">
+      <div class="input-group">
+        <label for="tEmail">이메일</label>
+        <input id="tEmail" type="email" placeholder="t1@school.kr" autocomplete="username"/>
+      </div>
+      <div class="input-group">
+        <label for="tPass">비밀번호</label>
+        <input id="tPass" type="password" placeholder="비밀번호" autocomplete="current-password"/>
+      </div>
+      <button type="submit" class="login-button" id="btnT">로그인</button>
+      <div class="helper-row">
+        <span class="hint">관리자 전용 페이지 접속</span>
+        <a class="link" href="/signup.html">선생님 회원가입</a>
+      </div>
+      <div id="msgT" class="status-message"></div>
+    </form>
+
+    <!-- 학생 -->
+    <form id="formS" style="display:none">
+      <div class="input-group">
+        <label for="sId">학번</label>
+        <input id="sId" placeholder="예) 20250001" inputmode="numeric"/>
+      </div>
+      <div class="input-group">
+        <label for="sPass">이름</label>
+        <input id="sPass" placeholder="예) 홍길동"/>
+      </div>
+      <button type="submit" class="login-button" id="btnS">로그인</button>
+      <div class="hint">※ 학생 비밀번호는 이름입니다. (예: 홍길동)</div>
+      <div id="msgS" class="status-message"></div>
+    </form>
+  </div>
+
+  <script>
+    // (선택) 이미 로그인된 경우 자동 분기
+    (async () => {
+      try {
+        const r = await fetch('/api/auth/whoami');
+        if (r.ok) {
+          const j = await r.json();
+          if (j.auth) {
+            if (j.role === 'teacher' || j.role === 'super') location.href = '/admin.html';
+            else if (j.role === 'student') location.href = '/student.html';
           }
-        });
-      });
-      document.getElementById('loginForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const username = document.getElementById('username').value.trim();
-        const password = document.getElementById('password').value.trim();
-        if (!username || !password) {
-          showMessage('아이디와 비밀번호를 모두 입력해주세요.', 'error');
-          return;
         }
-        setLoading(true);
-        try {
-          const resp = await fetch('/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password }),
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data.success) {
-              sessionStorage.setItem('userType', data.userType);
-              sessionStorage.setItem('username', data.username || username);
-              if (data.studentInfo) {
-                sessionStorage.setItem('studentInfo', JSON.stringify(data.studentInfo));
-              }
-              showMessage(
-                data.userType === 'admin'
-                  ? '관리자로 로그인되었습니다! 관리자 페이지로 이동합니다...'
-                  : '학생으로 로그인되었습니다! 학생 페이지로 이동합니다...',
-                'success'
-              );
-              setTimeout(() => {
-                window.location.href = data.userType === 'admin' ? 'admin.html' : 'student.html';
-              }, 900);
-              return;
-            }
-            showMessage(data.error || '로그인에 실패했습니다.', 'error');
-            return;
-          }
-          fallbackDemoLogin(username, password);
-        } catch (_) {
-          fallbackDemoLogin(username, password);
-        } finally {
-          setLoading(false);
-        }
-      });
-      function fallbackDemoLogin(username, password) {
-        if (username === 'admin' && password === 'admin123') {
-          sessionStorage.setItem('userType', 'admin');
-          sessionStorage.setItem('username', 'admin');
-          showMessage('관리자로 로그인되었습니다! 관리자 페이지로 이동합니다...', 'success');
-          setTimeout(() => (window.location.href = 'admin.html'), 900);
-          return;
-        }
-        if (username === 'student1' && password === 'pass123') {
-          const demoInfo = { name: '김학생', class: '1반', grade: '3학년' };
-          sessionStorage.setItem('userType', 'student');
-          sessionStorage.setItem('username', 'student1');
-          sessionStorage.setItem('studentInfo', JSON.stringify(demoInfo));
-          showMessage('학생으로 로그인되었습니다! 학생 페이지로 이동합니다...', 'success');
-          setTimeout(() => (window.location.href = 'student.html'), 900);
-          return;
-        }
-        showMessage('아이디 또는 비밀번호가 올바르지 않습니다.', 'error');
-      }
-   </script>
+      } catch (_) {}
+    })();
+
+    // 탭
+    const tabT = document.getElementById('tabT');
+    const tabS = document.getElementById('tabS');
+    const formT = document.getElementById('formT');
+    const formS = document.getElementById('formS');
+    function selectTab(t){
+      const isT = (t==='T');
+      tabT.classList.toggle('on', isT);
+      tabS.classList.toggle('on', !isT);
+      formT.style.display = isT ? '' : 'none';
+      formS.style.display = isT ? 'none' : '';
+    }
+    tabT.onclick = () => selectTab('T');
+    tabS.onclick = () => selectTab('S');
+
+    // 공통 유틸
+    async function postJson(url, data){
+      const res = await fetch(url,{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+      const text = await res.text(); let j={}; try{ if(text) j=JSON.parse(text);}catch(_){}
+      if (!res.ok || j.success===false) throw new Error(j.error || (res.status+' '+res.statusText));
+      return j;
+    }
+    function showMsg(el, msg, ok=true){
+      el.textContent = msg; el.className = 'status-message ' + (ok?'success':'error');
+      el.style.display='block'; if(!ok) setTimeout(()=>el.style.display='none', 3000);
+    }
+    function setBusy(btn,on){
+      btn.disabled = on;
+      if(on){ btn.dataset.prev = btn.textContent; btn.textContent = '로그인 중...'; }
+      else { btn.textContent = btn.dataset.prev || '로그인'; btn.removeAttribute('data-prev'); }
+    }
+
+    // 교사/수퍼 로그인
+    document.getElementById('formT').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const email = document.getElementById('tEmail').value.trim();
+      const password = document.getElementById('tPass').value.trim();
+      const msgBox = document.getElementById('msgT'); const btn = document.getElementById('btnT');
+      if(!email || !password) return showMsg(msgBox, '이메일과 비밀번호를 입력하세요.', false);
+      setBusy(btn,true);
+      try{
+        await postJson('/api/auth/login',{ email, password });
+        showMsg(msgBox,'로그인 성공! 관리자 페이지로 이동합니다.', true);
+        setTimeout(()=>location.href='/admin.html', 700);
+      }catch(err){ showMsg(msgBox, err.message || '로그인 실패', false); }
+      finally{ setBusy(btn,false); }
+    });
+
+    // 학생 로그인
+    document.getElementById('formS').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const username = document.getElementById('sId').value.trim();
+      const password = document.getElementById('sPass').value.trim();
+      const msgBox = document.getElementById('msgS'); const btn = document.getElementById('btnS');
+      if(!username || !password) return showMsg(msgBox, '학번과 이름을 입력하세요.', false);
+      setBusy(btn,true);
+      try{
+        await postJson('/api/auth/login',{ username, password });
+        showMsg(msgBox,'로그인 성공! 학생 페이지로 이동합니다.', true);
+        setTimeout(()=>location.href='/student.html', 700);
+      }catch(err){ showMsg(msgBox, err.message || '로그인 실패', false); }
+      finally{ setBusy(btn,false); }
+    });
+  </script>
 </body>
 </html>
