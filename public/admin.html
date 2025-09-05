@@ -245,23 +245,50 @@
       return j;
     }
 
-    /* teacherId 확보(세션 → /api/auth/whoami 순) */
-    let TEACHER_ID = null;
+    /* ───────── teacherId 확보(세션 → whoami 1회 시도 → 기본값) ───────── */
+    let TEACHER_ID =
+      sessionStorage.getItem('teacherId') ||
+      sessionStorage.getItem('username') || '';
+
+    let _whoamiOnce = null; // 메모이즈(최대 1회만 네트워크 시도)
+
     async function ensureTeacherId() {
       if (TEACHER_ID) return TEACHER_ID;
-      TEACHER_ID =
-        sessionStorage.getItem('teacherId') ||
-        sessionStorage.getItem('username') || '';
-      if (!TEACHER_ID) {
-        try {
-          const me = await getJson('/api/auth/whoami');
-          TEACHER_ID = me?.teacherId || me?.uid || me?.email || me?.user?.email || '';
-          if (TEACHER_ID) sessionStorage.setItem('teacherId', TEACHER_ID);
-        } catch (_) {}
+
+      if (!_whoamiOnce) {
+        _whoamiOnce = fetch('/api/auth/whoami', {
+          credentials: 'include',
+          cache: 'no-store'
+        })
+        .then(async (r) => {
+          if (!r.ok) throw new Error('no whoami');
+          const j = await r.json();
+          TEACHER_ID = j?.teacherId || j?.uid || j?.email || 'T_DEFAULT';
+          sessionStorage.setItem('teacherId', TEACHER_ID);
+          return TEACHER_ID;
+        })
+        .catch(() => {
+          // 조용히 세션/기본값으로
+          TEACHER_ID =
+            sessionStorage.getItem('teacherId') ||
+            sessionStorage.getItem('username') ||
+            'T_DEFAULT';
+          return TEACHER_ID;
+        });
       }
-      return TEACHER_ID || '';
+      return _whoamiOnce;
     }
 
+    function getTeacherId() { return TEACHER_ID || 'T_DEFAULT'; }
+
+    // 초기 로드 순서 보장
+    document.addEventListener('DOMContentLoaded', async () => {
+      await ensureTeacherId();
+      loadSavedRosters();
+      loadStudentStatus();
+      if (typeof loadActivityList === 'function') loadActivityList();
+    });
+    
     /* ───────── 페이지 전환 ───────── */
     function showPage(pageType){
       document.querySelectorAll('.menu-item').forEach(b=>b.classList.remove('active'));
@@ -558,3 +585,4 @@
   </script>
 </body>
 </html>
+
