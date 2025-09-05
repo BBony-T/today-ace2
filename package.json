@@ -27,5 +27,13 @@
     "url": "https://github.com/BBony-T/today-ace2.git"
   }
 }
+{
+  "dependencies": {
+    "firebase-admin": "^12.5.0",
+    "jsonwebtoken": "^9.0.2",
+    "cookie": "^0.6.0"
+  }
+}
+
 
 
