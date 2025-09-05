@@ -6,74 +6,103 @@
   <title>오늘의 에이스는? - 로그인</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
+
     body {
-      font-family: 'Arial', sans-serif; background-color:#fff8f0;
-      min-height:100vh; display:flex; align-items:center; justify-content:center;
-      position:relative; overflow:hidden;
+      font-family: 'Arial', sans-serif;
+      background-color: #fff8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
     }
-    /* 장식 배경 (기존 테마 유지) */
-    body::before{
-      content:''; position:absolute; top:-50px; left:-50px; width:150px; height:150px;
-      background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20 50 L35 25 L65 25 L80 50 L65 75 L35 75 Z" fill="%23ffd93d"/></svg>');
-      background-size:contain; background-repeat:no-repeat; opacity:.6; z-index:0;
+    body::before {
+      content: '';
+      position: absolute;
+      top: -50px;
+      left: -50px;
+      width: 150px;
+      height: 150px;
+      background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20 50 L35 25 L65 25 L80 50 L65 75 L35 75 Z" fill="%23ffd93d" stroke="none"/></svg>');
+      background-size: contain;
+      background-repeat: no-repeat;
+      opacity: 0.6;
+      z-index: 0;
     }
-    body::after{
-      content:''; position:absolute; bottom:-30px; right:-30px; width:120px; height:120px;
-      background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 10 C70 20, 90 40, 80 60 C70 80, 30 80, 20 60 C10 40, 30 20, 50 10 Z" fill="%23c77dff"/></svg>');
-      background-size:contain; background-repeat:no-repeat; opacity:.5; z-index:0;
+    body::after {
+      content: '';
+      position: absolute;
+      bottom: -30px;
+      right: -30px;
+      width: 120px;
+      height: 120px;
+      background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 10 C70 20, 90 40, 80 60 C70 80, 30 80, 20 60 C10 40, 30 20, 50 10 Z" fill="%23c77dff" stroke="none"/></svg>');
+      background-size: contain;
+      background-repeat: no-repeat;
+      opacity: 0.5;
+      z-index: 0;
     }
 
-    .login-container{
-      background:#fff; padding:40px 28px 30px; border-radius:25px;
-      box-shadow:0 20px 40px rgba(255,217,61,.2);
-      width:100%; max-width:460px; text-align:center; position:relative; z-index:1;
-      border:3px solid #ffe0b3;
+    .login-container {
+      background: #fff;
+      padding: 40px 28px 30px;
+      border-radius: 25px;
+      box-shadow: 0 20px 40px rgba(255, 217, 61, 0.2);
+      width: 100%;
+      max-width: 460px;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      border: 3px solid #ffe0b3;
     }
-    .logo{ margin-bottom:18px; }
-    .logo h1{ color:#2d3748; font-size:32px; font-weight:bold; margin-bottom:6px; }
-    .logo p{ color:#4a5568; font-size:15px; font-weight:500; }
 
-    /* 탭 */
-    .tabs{ display:flex; gap:8px; justify-content:center; margin:14px 0 18px; }
-    .tab{
+    .logo { margin-bottom: 18px; }
+    .logo h1 { color:#2d3748; font-size:32px; font-weight:bold; margin-bottom:6px; }
+    .logo p  { color:#4a5568; font-size:15px; font-weight:500; }
+
+    .tabs { display:flex; gap:8px; justify-content:center; margin: 14px 0 18px; }
+    .tab {
       flex:1; background:#fffef7; border:2px solid #ffd93d; color:#4a5568;
-      padding:10px 12px; border-radius:999px; font-weight:700; cursor:pointer;
+      padding:10px 12px; border-radius: 999px; font-weight:700; cursor:pointer;
       transition:.2s; user-select:none;
     }
-    .tab:hover{ background:#fff3bf; }
-    .tab.on{
-      background:#ffd93d; color:#2d3748;
-      box-shadow:0 10px 20px rgba(255,217,61,.35);
-    }
+    .tab:hover { background:#fff3bf; }
+    .tab.on { background:#ffd93d; color:#2d3748; box-shadow: 0 10px 20px rgba(255, 217, 61, 0.35); }
 
-    .input-group{ margin-bottom:16px; text-align:left; }
-    .input-group label{ display:block; color:#2d3748; font-weight:600; margin-bottom:8px; font-size:14px; }
-    .input-group input{
+    .input-group { margin-bottom: 16px; text-align:left; }
+    .input-group label { display:block; color:#2d3748; font-weight:600; margin-bottom:8px; font-size:14px; }
+    .input-group input {
       width:100%; padding:14px; border:2px solid #ffd93d; border-radius:15px; font-size:16px;
-      transition:.25s; background:#fffef7;
+      transition: all .25s ease; background:#fffef7;
     }
-    .input-group input:focus{
-      outline:none; border-color:#ffb700; box-shadow:0 0 0 3px rgba(255,217,61,.2); background:#fff;
+    .input-group input:focus {
+      outline:none; border-color:#ffb700; box-shadow:0 0 0 3px rgba(255, 217, 61, .2); background:#fff;
     }
-    .login-button{
-      width:100%; background:#ffd93d; color:#2d3748; border:none; padding:16px;
-      border-radius:15px; font-size:16px; font-weight:700; cursor:pointer; transition:.25s; margin-top:6px;
-    }
-    .login-button:hover{ transform:translateY(-2px); box-shadow:0 15px 30px rgba(255,217,61,.4); background:#ffb700; }
-    .login-button:active{ transform:translateY(0); }
 
-    .helper-row{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:14px; }
-    .link{ color:#6c5ce7; text-decoration:none; font-weight:700; }
-    .link:hover{ text-decoration:underline; }
-
-    .status-message{
-      margin-top:14px; padding:10px; border-radius:10px; font-size:14px; display:none; border:2px solid transparent;
+    .login-button {
+      width:100%; background:#ffd93d; color:#2d3748; border:none;
+      padding:16px; border-radius:15px; font-size:16px; font-weight:700;
+      cursor:pointer; transition:.25s; margin-top:6px;
     }
-    .success{ background:#e6fffa; color:#234e52; border-color:#81e6d9; }
-    .error{ background:#ffe6e6; color:#c53030; border-color:#fc8181; }
+    .login-button:hover { transform: translateY(-2px); box-shadow: 0 15px 30px rgba(255, 217, 61, 0.4); background:#ffb700; }
+    .login-button:active { transform: translateY(0); }
 
-    .hint{ color:#6b7280; font-size:12px; margin-top:6px; text-align:left; }
-    @media (max-width:420px){ .logo h1{font-size:28px;} .tabs{gap:6px;} .tab{padding:9px 10px; font-size:14px;} }
+    .helper-row { display:flex; justify-content:space-between; align-items:center; margin-top: 10px; font-size:14px; }
+    .link { color:#6c5ce7; text-decoration:none; font-weight:700; }
+    .link:hover { text-decoration:underline; }
+
+    .status-message { margin-top: 14px; padding: 10px; border-radius: 10px; font-size: 14px; display:none; border:2px solid transparent; }
+    .success { background:#e6fffa; color:#234e52; border-color:#81e6d9; }
+    .error   { background:#ffe6e6; color:#c53030; border-color:#fc8181; }
+
+    .hint { color:#6b7280; font-size:12px; margin-top:6px; text-align:left; }
+
+    @media (max-width: 420px) {
+      .logo h1 { font-size:28px; }
+      .tabs { gap:6px; }
+      .tab { padding:9px 10px; font-size:14px; }
+    }
   </style>
 </head>
 <body>
@@ -83,21 +112,21 @@
       <p>따뜻한 마음으로 함께 성장해요!</p>
     </div>
 
-    <!-- 탭 -->
+    <!-- 탭: 선생님/수퍼 vs 학생 -->
     <div class="tabs">
       <div id="tabT" class="tab on">선생님 · 수퍼</div>
       <div id="tabS" class="tab">학생</div>
     </div>
 
-    <!-- 선생님/수퍼 -->
+    <!-- 선생님/수퍼 로그인 -->
     <form id="formT">
       <div class="input-group">
         <label for="tEmail">이메일</label>
-        <input id="tEmail" type="email" placeholder="t1@school.kr" autocomplete="username"/>
+        <input id="tEmail" type="email" placeholder="t1@school.kr" autocomplete="username" />
       </div>
       <div class="input-group">
         <label for="tPass">비밀번호</label>
-        <input id="tPass" type="password" placeholder="비밀번호" autocomplete="current-password"/>
+        <input id="tPass" type="password" placeholder="비밀번호" autocomplete="current-password" />
       </div>
       <button type="submit" class="login-button" id="btnT">로그인</button>
       <div class="helper-row">
@@ -107,15 +136,15 @@
       <div id="msgT" class="status-message"></div>
     </form>
 
-    <!-- 학생 -->
+    <!-- 학생 로그인 -->
     <form id="formS" style="display:none">
       <div class="input-group">
         <label for="sId">학번</label>
-        <input id="sId" placeholder="예) 20250001" inputmode="numeric"/>
+        <input id="sId" placeholder="예) 20250001" inputmode="numeric" />
       </div>
       <div class="input-group">
         <label for="sPass">이름</label>
-        <input id="sPass" placeholder="예) 홍길동"/>
+        <input id="sPass" placeholder="예) 홍길동" />
       </div>
       <button type="submit" class="login-button" id="btnS">로그인</button>
       <div class="hint">※ 학생 비밀번호는 이름입니다. (예: 홍길동)</div>
@@ -124,82 +153,107 @@
   </div>
 
   <script>
-    // (선택) 이미 로그인된 경우 자동 분기
-    (async () => {
-      try {
-        const r = await fetch('/api/auth/whoami');
-        if (r.ok) {
-          const j = await r.json();
-          if (j.auth) {
-            if (j.role === 'teacher' || j.role === 'super') location.href = '/admin.html';
-            else if (j.role === 'student') location.href = '/student.html';
-          }
-        }
-      } catch (_) {}
-    })();
-
-    // 탭
+    // ───────── 탭 전환 ─────────
     const tabT = document.getElementById('tabT');
     const tabS = document.getElementById('tabS');
     const formT = document.getElementById('formT');
     const formS = document.getElementById('formS');
-    function selectTab(t){
-      const isT = (t==='T');
-      tabT.classList.toggle('on', isT);
-      tabS.classList.toggle('on', !isT);
-      formT.style.display = isT ? '' : 'none';
-      formS.style.display = isT ? 'none' : '';
+
+    function selectTab(t) {
+      const teacher = (t === 'T');
+      tabT.classList.toggle('on', teacher);
+      tabS.classList.toggle('on', !teacher);
+      formT.style.display = teacher ? '' : 'none';
+      formS.style.display = teacher ? 'none' : '';
     }
     tabT.onclick = () => selectTab('T');
     tabS.onclick = () => selectTab('S');
 
-    // 공통 유틸
-    async function postJson(url, data){
-      const res = await fetch(url,{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
-      const text = await res.text(); let j={}; try{ if(text) j=JSON.parse(text);}catch(_){}
-      if (!res.ok || j.success===false) throw new Error(j.error || (res.status+' '+res.statusText));
+    // ───────── 공통 유틸 ─────────
+    async function postJson(url, data) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',     // 세션 쿠키 포함
+        cache: 'no-store',
+        body: JSON.stringify(data)
+      });
+      const text = await res.text();
+      let j = {};
+      try { if (text) j = JSON.parse(text); } catch(_) {}
+      if (!res.ok || j.success === false) {
+        throw new Error(j.error || (res.status + ' ' + res.statusText));
+      }
       return j;
     }
-    function showMsg(el, msg, ok=true){
-      el.textContent = msg; el.className = 'status-message ' + (ok?'success':'error');
-      el.style.display='block'; if(!ok) setTimeout(()=>el.style.display='none', 3000);
+    function showMsg(el, msg, ok=true) {
+      el.textContent = msg;
+      el.className = 'status-message ' + (ok ? 'success' : 'error');
+      el.style.display = 'block';
+      if (!ok) setTimeout(() => { el.style.display = 'none'; }, 3000);
     }
-    function setBusy(btn,on){
+    function setBusy(btn, on) {
       btn.disabled = on;
-      if(on){ btn.dataset.prev = btn.textContent; btn.textContent = '로그인 중...'; }
-      else { btn.textContent = btn.dataset.prev || '로그인'; btn.removeAttribute('data-prev'); }
+      const t = btn.textContent;
+      if (on) { btn.setAttribute('data-prev', t); btn.textContent = '로그인 중...'; }
+      else { btn.textContent = btn.getAttribute('data-prev') || '로그인'; btn.removeAttribute('data-prev'); }
     }
 
-    // 교사/수퍼 로그인
-    document.getElementById('formT').addEventListener('submit', async (e)=>{
+    // ───────── 선생님/수퍼 로그인 ─────────
+    document.getElementById('formT').addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = document.getElementById('tEmail').value.trim();
       const password = document.getElementById('tPass').value.trim();
-      const msgBox = document.getElementById('msgT'); const btn = document.getElementById('btnT');
-      if(!email || !password) return showMsg(msgBox, '이메일과 비밀번호를 입력하세요.', false);
-      setBusy(btn,true);
-      try{
-        await postJson('/api/auth/login',{ email, password });
-        showMsg(msgBox,'로그인 성공! 관리자 페이지로 이동합니다.', true);
-        setTimeout(()=>location.href='/admin.html', 700);
-      }catch(err){ showMsg(msgBox, err.message || '로그인 실패', false); }
-      finally{ setBusy(btn,false); }
+      const msgBox = document.getElementById('msgT');
+      const btn = document.getElementById('btnT');
+
+      if (!email || !password) return showMsg(msgBox, '이메일과 비밀번호를 입력하세요.', false);
+
+      setBusy(btn, true);
+      try {
+        // mode: 'teacher' 추가
+        await postJson('/api/auth/login', { mode: 'teacher', email, password });
+        showMsg(msgBox, '로그인 성공! 관리자 페이지로 이동합니다.', true);
+        setTimeout(() => location.href = '/admin.html', 700);
+      } catch (err) {
+        showMsg(msgBox, err.message || '로그인 실패', false);
+      } finally {
+        setBusy(btn, false);
+      }
     });
 
-    // 학생 로그인
-    document.getElementById('formS').addEventListener('submit', async (e)=>{
+    // ───────── 학생 로그인 ─────────
+    document.getElementById('formS').addEventListener('submit', async (e) => {
       e.preventDefault();
       const username = document.getElementById('sId').value.trim();
       const password = document.getElementById('sPass').value.trim();
-      const msgBox = document.getElementById('msgS'); const btn = document.getElementById('btnS');
-      if(!username || !password) return showMsg(msgBox, '학번과 이름을 입력하세요.', false);
-      setBusy(btn,true);
-      try{
-        await postJson('/api/auth/login',{ username, password });
-        showMsg(msgBox,'로그인 성공! 학생 페이지로 이동합니다.', true);
-        setTimeout(()=>location.href='/student.html', 700);
-      }catch(err){ showMsg(msgBox, err.message || '로그인 실패', false); }
-      finally{ setBusy(btn,false); }
+      const msgBox = document.getElementById('msgS');
+      const btn = document.getElementById('btnS');
+
+      if (!username || !password) return showMsg(msgBox, '학번과 이름을 입력하세요.', false);
+
+      setBusy(btn, true);
+      try {
+        // 1) 가장 권장: 같은 엔드포인트 + 모드 지정
+        let r = await tryReq('/api/auth/login', { username, password, mode: 'student' });
+
+        // 2) 실패 시: 같은 엔드포인트, 다른 키 조합
+        if (r._err) r = await tryReq('/api/auth/login', { studentId: username, name: password });
+        if (r._err) r = await tryReq('/api/auth/login', { id: username, fullname: password });
+
+        // 3) 서버가 학생 전용 엔드포인트를 쓸 경우
+        if (r._err) r = await tryReq('/api/auth/student-login', { username, password });
+        if (r._err) r = await tryReq('/api/auth/login-student', { studentId: username, name: password });
+
+        if (r._err) throw r._err;
+
+        showMsg(msgBox, '로그인 성공! 학생 페이지로 이동합니다.', true);
+        setTimeout(() => location.href = '/student.html', 700);
+      } catch (err) {
+        showMsg(msgBox, err.message || '로그인 실패(계정이 없거나 비밀번호가 일치하지 않습니다)', false);
+      } finally {
+        setBusy(btn, false);
+      }
     });
   </script>
 </body>
