@@ -351,6 +351,7 @@
               await postJson('/api/admin/publish-roster?teacherId=' + encodeURIComponent(tid),
                              { rosterId:id, publish });
               await loadSavedRosters();
+              await refreshStatsFiltersFromRosters(); // ← 추가
               await loadStudentStatus();     // 활성 명부 바뀌면 현황판도 갱신
             }catch(e){
               alert('노출 설정 실패: ' + (e.message || 'unknown'));
@@ -369,6 +370,7 @@
               await postJson('/api/admin/delete-roster?teacherId=' + encodeURIComponent(tid),
                              { rosterId: btn.dataset.id });
               await loadSavedRosters();
+              await refreshStatsFiltersFromRosters(); // ← 추가
               await loadStudentStatus();
             }catch(e){
               alert('삭제 실패: ' + (e.message || 'unknown'));
@@ -463,6 +465,7 @@
         showMessage(`명부가 저장되었습니다. (총 ${roster.length}명)`, 'success');
         UP.preview=[]; renderPreview(); closeRosterModal();
         await loadSavedRosters();
+        await refreshStatsFiltersFromRosters(); // ← 추가
         await loadStudentStatus();
       }catch(e){
         // 혹시 서버가 students 키만 받을 때 재시도
@@ -567,11 +570,48 @@
     function clearAllData(){ if(confirm('정말 초기화할까요?')){ localStorage.clear(); showMessage('모든 데이터가 초기화되었습니다.','success'); closeRosterModal(); loadStudentStatus(); } }
     function logout(){ if(confirm('정말로 로그아웃하시겠습니까?')) location.href='login.html'; }
 
+    // 저장된 명부로 통계 드롭다운 채우기
+    function setSelectOptions(sel, items){
+      if (!sel) return;
+      const keep = sel.value;
+      sel.innerHTML =
+        '<option value="">전체</option>' +
+        items.sort((a,b)=>a.localeCompare(b,'ko'))
+             .map(v=>`<option value="${v}">${v}</option>`).join('');
+      if ([...sel.options].some(o=>o.value===keep)) sel.value = keep;
+    }
+
+    async function refreshStatsFiltersFromRosters() {
+      try {
+        const tid = await ensureTeacherId();
+        const { rosters = [] } = await getJson(
+          '/api/admin/list-rosters?teacherId=' + encodeURIComponent(tid)
+        );
+
+        const subjects = new Set();
+        const clubs    = new Set();
+
+        rosters.forEach(r => {
+          const type = (r.categoryType || r.type || '').toString().toLowerCase();
+          const name = r.categoryName || r.title || r.name || '';
+          if (!name || name === '무제 명부') return;
+          if (type === 'subject') subjects.add(name);
+         else if (type === 'club') clubs.add(name);
+        });
+
+        setSelectOptions(document.getElementById('statsSubject'), [...subjects]);
+        setSelectOptions(document.getElementById('statsClub'),    [...clubs]);
+      } catch (e) {
+        console.warn('통계 필터 갱신 실패:', e);
+      }
+    }
+   
     /* ───────── 초기 로드 ───────── */
     document.addEventListener('DOMContentLoaded', async ()=>{
       await ensureTeacherId();   // teacherId 먼저 확보
-      loadSavedRosters();        // 저장된 명부
-      loadStudentStatus();       // 현황판
+      await refreshStatsFiltersFromRosters(); // ← 추가!
+      await loadSavedRosters();        // 저장된 명부
+      await loadStudentStatus();       // 현황판
       loadActivityList();        // 활동목록(기존)
     });
 
@@ -585,4 +625,5 @@
   </script>
 </body>
 </html>
+
 
