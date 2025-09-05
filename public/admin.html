@@ -245,6 +245,26 @@
       return j;
     }
 
+    let TEACHER_ID = null;
+    async function ensureTeacherId() {
+      if (TEACHER_ID) return TEACHER_ID;
+
+      TEACHER_ID =
+        sessionStorage.getItem('teacherId') ||
+        sessionStorage.getItem('username') || '';
+
+      if (!TEACHER_ID) {
+        try {
+          const me = await getJson('/api/auth/whoami');
+          TEACHER_ID =
+            me?.teacherId || me?.uid || me?.email || me?.user?.email || '';
+          if (TEACHER_ID) sessionStorage.setItem('teacherId', TEACHER_ID);
+        } catch (_) {}
+      }
+      return TEACHER_ID;
+    }
+
+    
     /* ========== 페이지 전환 ========== */
     function showPage(pageType){
       document.querySelectorAll('.menu-item').forEach(b=>b.classList.remove('active'));
@@ -594,6 +614,7 @@
   </script>
 </body>
 </html>
+
 
 
 
