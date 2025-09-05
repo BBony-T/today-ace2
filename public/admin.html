@@ -420,7 +420,7 @@
     /* ========== 학생 현황 (기존 로직) ========== */
     async function loadStudentStatus(){
       try{
-        const res = await fetch('/api/admin/list-students');
+        const res = await fetch('/api/admin/list-students?onlyActive=1');
         const j = await readJsonSafe(res);
         if(!res.ok || !j.success) throw new Error(j.error||'조회 실패');
         const students = Array.isArray(j.students)?j.students:[];
@@ -507,3 +507,4 @@
   </script>
 </body>
 </html>
+
