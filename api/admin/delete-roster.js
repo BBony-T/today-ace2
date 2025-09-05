@@ -1,6 +1,5 @@
 // /api/admin/delete-roster.js
 import { db } from '../_fb.js';
-import admin from 'firebase-admin';
 import { getUserFromReq } from '../_shared/initAdmin.js';
 
 export default async function handler(req, res) {
@@ -9,44 +8,38 @@ export default async function handler(req, res) {
 
     const me = getUserFromReq(req);
     const teacherId =
-      (me && (me.role === 'super' && req.query.teacherId ? req.query.teacherId : (me.teacherId || me.uid))) ||
-      req.query.teacherId ||
-      'T_DEFAULT';
+      (me && (me.teacherId || me.uid)) ||
+      req.query.teacherId || req.body.teacherId || 'T_DEFAULT';
 
-    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const rosterId = body.rosterId || body.id;
-    if (!rosterId) return res.status(400).json({ success:false, error:'rosterId 가 필요합니다.' });
+    const { rosterId } = req.body || {};
+    if (!rosterId) return res.status(400).json({ success:false, error:'rosterId required' });
 
-    // boards.activeRosterIds에서 제거
-    const boardRef = db().collection('boards').doc(teacherId);
-    await db().runTransaction(async tx => {
-      const b = await tx.get(boardRef);
-      const cur = b.exists ? (b.data().activeRosterIds || []) : [];
-      const next = cur.filter(x => x !== rosterId);
-      tx.set(boardRef, {
-        activeRosterIds: next,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge:true });
-    });
-
-    // 해당 roster 학생들 삭제
-    const col = db().collection('students');
-    let deleted = 0;
-    const qs = await col.where('teacherId','==',teacherId).where('rosterId','==',rosterId).get();
-    let batch = db().batch(); let ops = 0;
-    for (const doc of qs.docs) {
-      batch.delete(doc.ref);
-      ops++; deleted++;
-      if (ops >= 450) { await batch.commit(); batch = db().batch(); ops = 0; }
-    }
-    if (ops > 0) await batch.commit();
-
-    // roster 문서 삭제
+    // 1) roster 삭제
     await db().collection('rosters').doc(rosterId).delete();
 
-    return res.status(200).json({ success:true, deletedStudents: deleted, rosterId });
+    // 2) 보드 active 목록에서 제거
+    const boardRef = db().collection('boards').doc(teacherId);
+    const snap = await boardRef.get();
+    if (snap.exists) {
+      const active = (snap.data().activeRosterIds || []).filter(id => id !== rosterId);
+      await boardRef.set({ activeRosterIds: active }, { merge: true });
+    }
+
+    // 3) 해당 roster 학생들 비활성(또는 실제 삭제 원하면 delete)
+    const col = db().collection('students');
+    const qs = await col.where('teacherId','==',teacherId).where('rosterId','==',rosterId).get();
+
+    let batch = db().batch(), i = 0;
+    qs.forEach(doc => {
+      batch.update(doc.ref, { enabled: false });
+      i++;
+      if (i % 400 === 0) { batch.commit(); batch = db().batch(); }
+    });
+    await batch.commit();
+
+    return res.status(200).json({ success:true });
   } catch (e) {
-    console.error('[delete-roster] error', e);
-    return res.status(500).json({ success:false, error: e?.message || 'server error' });
+    console.error('[delete-roster] error:', e);
+    return res.status(500).json({ success:false, error:e?.message || 'server error' });
   }
 }
