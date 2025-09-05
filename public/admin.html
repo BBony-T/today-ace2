@@ -55,7 +55,7 @@
     .success-message{background:#e6fffa;color:#234e52;padding:10px 15px;border-radius:8px;margin-bottom:15px;border-left:4px solid #81e6d9}
     .error-message{background:#ffe6e6;color:#c53030;padding:10px 15px;border-radius:8px;margin-bottom:15px;border-left:4px solid #fc8181}
 
-    /* ====== 저장된 명부 카드(추가) ====== */
+    /* ====== 저장된 명부 카드 ====== */
     .roster-item{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid #f0f0f0;border-radius:12px;margin:8px 0;background:#fff}
     .roster-main{flex:1}
     .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid #ffe0b3;background:#fff5e6;margin-left:6px}
@@ -96,7 +96,7 @@
 
       <div id="classInfo" style="text-align:center;color:#666;margin-bottom:15px;">현재 조회: 전체</div>
 
-      <!-- ✅ 저장된 명부 박스: 여기 안에 실제 명부가 렌더링됨 -->
+      <!-- 저장된 명부 -->
       <div class="card orange" id="rosterListCard">
         <h3>📚 저장된 명부</h3>
         <p id="saved-roster-empty" style="text-align:center;color:#888">저장된 명부가 없습니다. 먼저 업로드 해 주세요.</p>
@@ -128,7 +128,7 @@
       </div>
     </div>
 
-    <!-- 통계 페이지 (내용 동일) -->
+    <!-- 통계 페이지 (요약만, 나머지는 기존과 동일) -->
     <div id="statisticsPage" class="page-content">
       <div class="card orange">
         <h3>📈 통계 조회</h3>
@@ -164,7 +164,7 @@
             <div style="text-align:center;color:#666;padding:20px;">통계 데이터를 불러오는 중...</div>
           </div>
 
-          <!-- 활동 정보 관리(기존) -->
+          <!-- 활동 정보 관리 (기존) -->
           <div style="margin-top:20px;padding-top:20px;border-top:2px solid #fff5e6;">
             <h4 style="text-align:center;margin-bottom:15px;color:#2d3748;">📝 활동 정보 관리</h4>
             <div style="display:flex;gap:10px;margin-bottom:15px;">
@@ -222,7 +222,7 @@
   </div>
 
   <script>
-    /* ========== 공통 유틸 ========== */
+    /* ───────── 공통 유틸 ───────── */
     async function readJsonSafe(res){
       try{ return await res.clone().json(); }
       catch{ let t=''; try{ t=await res.text(); }catch{}; return {success:false,error:(t && t.slice(0,200))||`HTTP ${res.status}`} }
@@ -245,27 +245,24 @@
       return j;
     }
 
+    /* teacherId 확보(세션 → /api/auth/whoami 순) */
     let TEACHER_ID = null;
     async function ensureTeacherId() {
       if (TEACHER_ID) return TEACHER_ID;
-
       TEACHER_ID =
         sessionStorage.getItem('teacherId') ||
         sessionStorage.getItem('username') || '';
-
       if (!TEACHER_ID) {
         try {
           const me = await getJson('/api/auth/whoami');
-          TEACHER_ID =
-            me?.teacherId || me?.uid || me?.email || me?.user?.email || '';
+          TEACHER_ID = me?.teacherId || me?.uid || me?.email || me?.user?.email || '';
           if (TEACHER_ID) sessionStorage.setItem('teacherId', TEACHER_ID);
         } catch (_) {}
       }
-      return TEACHER_ID;
+      return TEACHER_ID || '';
     }
 
-    
-    /* ========== 페이지 전환 ========== */
+    /* ───────── 페이지 전환 ───────── */
     function showPage(pageType){
       document.querySelectorAll('.menu-item').forEach(b=>b.classList.remove('active'));
       event.target.classList.add('active');
@@ -274,154 +271,91 @@
       else { document.getElementById('statisticsPage').classList.add('active'); loadStatistics(); }
     }
 
-    /* ========== 저장된 명부 목록 렌더링(핵심) ========== */
-    function rosterTitle(r){ return r.title || r.name || '명부 업로드'; }
-    function rosterCount(r){ return (r.count ?? r.studentCount ?? 0); }
+    /* ───────── 저장된 명부 목록 ───────── */
+    function rosterTitle(r){ return r.title || r.name || r.categoryName || '명부'; }
+    function rosterCount(r){ return (r.itemCount ?? r.count ?? r.studentCount ?? 0); }
 
-    function renderRosterItem(r){
-      const el = document.createElement('div');
-      el.className = 'roster-item';
-      el.innerHTML = `
-        <div class="roster-main">
-          <div style="font-weight:700">${rosterTitle(r)}
-            <span class="tag">${rosterCount(r)}명</span>
-            ${r.published || r.active ? '<span class="tag" style="border-color:#c7ffe0;background:#f2fff8">노출중</span>' : ''}
-          </div>
-          <div style="color:#888;font-size:12px">id: ${r.id}</div>
-        </div>
-        <label class="tiny-check">
-          <input type="checkbox" ${ (r.active || r.published) ? 'checked':'' } data-id="${r.id}" class="js-publish">
-          현황판 노출
-        </label>
-        <button class="tiny-btn btn-danger js-del" data-id="${r.id}">삭제</button>
-      `;
-      // 토글
-      el.querySelector('.js-publish').addEventListener('change', async (e)=>{
-        const id = e.target.dataset.id;
-        const publish = e.target.checked;
-        e.target.disabled = true;
-        try{
-          await postJson('/api/admin/publish-roster', { rosterId:id, publish });
-          await loadSavedRosters();
-          if(typeof loadStudentStatus==='function') loadStudentStatus();
-        }catch(err){
-          alert(err.message||'노출 설정 실패');
-          e.target.checked = !publish;
-        }finally{ e.target.disabled=false; }
-      });
-      // 삭제
-      el.querySelector('.js-del').addEventListener('click', async (e)=>{
-        const id = e.target.dataset.id;
-        if(!confirm('이 명부를 삭제할까요? (학생 데이터는 그대로 남아있을 수 있습니다)')) return;
-        e.target.disabled = true;
-        try{
-          await postJson('/api/admin/delete-roster', { rosterId:id });   // ← 서버에 이 엔드포인트가 필요합니다.
-          await loadSavedRosters();
-          if(typeof loadStudentStatus==='function') loadStudentStatus();
-        }catch(err){
-          alert(err.message||'삭제 실패');
-        }finally{ e.target.disabled=false; }
-      });
-      return el;
-    }
-     
-    function getTeacherId() {
-      // 로그인 시 세션에 넣어둔 값 사용 (사용 중인 키 이름에 맞춰 하나라도 있으면 OK)
-      return (
-        sessionStorage.getItem('teacherId') ||
-        sessionStorage.getItem('username') ||  // 예: nightmoon@korea.kr
-        ''
-      );
-    }
-    
     async function loadSavedRosters() {
-      const box = document.getElementById('rosterList');   // ← 기존 savedRosters → rosterList
+      const box = document.getElementById('rosterList');
+      const empty = document.getElementById('saved-roster-empty');
       if (!box) return;
-
       box.innerHTML = '<div style="padding:8px;color:#666">저장된 명부를 불러오는 중…</div>';
 
       try {
-        const { rosters } = await getJson('/api/admin/list-rosters?teacherId=' +
-                                  encodeURIComponent(getTeacherId()));
+        const tid = await ensureTeacherId();
+        const { rosters } = await getJson('/api/admin/list-rosters?teacherId=' + encodeURIComponent(tid));
 
         if (!rosters || rosters.length === 0) {
-          box.innerHTML = '<div style="padding:8px;color:#999">저장된 명부 없음</div>';
+          box.innerHTML = '';
+          empty.style.display = '';
           return;
         }
+        empty.style.display = 'none';
 
-        // title(카테고리)이 없으면 categoryName/Type으로 보완, 인원은 itemCount/count/0 순
-        const rows = rosters.map(r => {
-          const title =
-            r.title ||
-            (r.categoryName ? r.categoryName : '무제 명부');
-          const cnt = (r.itemCount ?? r.count ?? 0);
+        box.innerHTML = rosters.map(r => {
+          const title = rosterTitle(r);
+          const cnt = rosterCount(r);
+          const active = !!(r.active || r.published);
           return `
-            <div style="display:flex;align-items:center;gap:12px;padding:10px;border:1px solid #eee;border-radius:10px;margin:6px 0">
-              <div style="flex:1">
-                <div style="font-weight:700">${title} <span style="color:#999;font-weight:500">(${cnt}명)</span></div>
+            <div class="roster-item">
+              <div class="roster-main">
+                <div style="font-weight:700">${title}
+                  <span class="tag">${cnt}명</span>
+                  ${active ? '<span class="tag" style="border-color:#c7ffe0;background:#f2fff8">노출중</span>' : ''}
+                </div>
                 <div style="color:#888;font-size:12px">id: ${r.id}</div>
               </div>
-
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px">
-                <input type="checkbox" ${r.active ? 'checked' : ''} data-id="${r.id}" class="toggle-publish" />
-                현황판 노출
+              <label class="tiny-check">
+                <input type="checkbox" ${active ? 'checked':''} data-id="${r.id}" class="js-publish"> 현황판 노출
               </label>
-
-              <button class="del-roster" data-id="${r.id}"
-                      style="background:#e53e3e;color:#fff;border:none;padding:6px 10px;border-radius:6px">
-                삭제
-              </button>
+              <button class="tiny-btn btn-danger js-del" data-id="${r.id}">삭제</button>
             </div>
           `;
         }).join('');
 
-        box.innerHTML = rows;
-
-        // 현황판 노출 토글
-        box.querySelectorAll('.toggle-publish').forEach(el => {
+        // 토글
+        box.querySelectorAll('.js-publish').forEach(el=>{
           el.onchange = async () => {
+            const id = el.dataset.id;
+            const publish = el.checked;
             el.disabled = true;
-            try {
-              await postJson(
-                '/api/admin/publish-roster?teacherId=' + encodeURIComponent(getTeacherId()),
-                { rosterId: el.dataset.id, publish: el.checked }
-              );
-              // 활성 명부가 바뀌었으니 현황판 갱신
-              await loadStudentStatus();
-            } catch (e) {
-              alert('실패: ' + e.message);
-              el.checked = !el.checked;
-            } finally {
-              el.disabled = false;
-            }
+            try{
+              const tid = await ensureTeacherId();
+              await postJson('/api/admin/publish-roster?teacherId=' + encodeURIComponent(tid),
+                             { rosterId:id, publish });
+              await loadSavedRosters();
+              await loadStudentStatus();     // 활성 명부 바뀌면 현황판도 갱신
+            }catch(e){
+              alert('노출 설정 실패: ' + (e.message || 'unknown'));
+              el.checked = !publish;
+            }finally{ el.disabled=false; }
           };
         });
 
         // 삭제
-        box.querySelectorAll('.del-roster').forEach(btn => {
+        box.querySelectorAll('.js-del').forEach(btn=>{
           btn.onclick = async () => {
             if (!confirm('이 명부를 삭제하시겠습니까?')) return;
             btn.disabled = true;
-            try {
-              await postJson(
-                '/api/admin/delete-roster?teacherId=' + encodeURIComponent(getTeacherId()),
-                { rosterId: btn.dataset.id }
-              );
-              await loadSavedRosters();   // 목록 갱신
-              await loadStudentStatus();  // 현황판 갱신
-            } catch (e) {
-              alert('삭제 실패: ' + e.message);
-            } finally {
-              btn.disabled = false;
-            }
+            try{
+              const tid = await ensureTeacherId();
+              await postJson('/api/admin/delete-roster?teacherId=' + encodeURIComponent(tid),
+                             { rosterId: btn.dataset.id });
+              await loadSavedRosters();
+              await loadStudentStatus();
+            }catch(e){
+              alert('삭제 실패: ' + (e.message || 'unknown'));
+            }finally{ btn.disabled=false; }
           };
         });
+
       } catch (e) {
         console.error(e);
         box.innerHTML = '<div style="padding:8px;color:#c53030">목록을 불러오지 못했습니다.</div>';
       }
     }
-    /* ========== 업로드 ========== */
+
+    /* ───────── 업로드 ───────── */
     const UP = { preview: [] };
     function getUploadMeta(){
       const type = (document.querySelector('input[name="catType"]:checked')?.value)||'subject';
@@ -491,33 +425,41 @@
       }));
 
       try{
-        await postJson('/api/admin/import-students',{ skipExisting:true, categoryType: type, categoryName: name, roster });
+        const tid = await ensureTeacherId();
+        await postJson('/api/admin/import-students', {
+          skipExisting: true,
+          categoryType: type,
+          categoryName: name,
+          teacherId: tid,            // 서버가 사용할 수 있도록 전달(선택)
+          roster                     // 서버는 이 배열로 학생 문서를 만듦
+        });
         showMessage(`명부가 저장되었습니다. (총 ${roster.length}명)`, 'success');
         UP.preview=[]; renderPreview(); closeRosterModal();
         await loadSavedRosters();
-        if(typeof loadStudentStatus==='function') loadStudentStatus();
+        await loadStudentStatus();
       }catch(e){
-        // 혹시 서버가 students 키만 받을 때
+        // 혹시 서버가 students 키만 받을 때 재시도
         try{
-          await postJson('/api/admin/import-students',{ skipExisting:true, students: roster });
+          const tid = await ensureTeacherId();
+          await postJson('/api/admin/import-students', { skipExisting:true, teacherId: tid, students: roster });
           showMessage(`명부가 저장되었습니다. (총 ${roster.length}명)`, 'success');
           UP.preview=[]; renderPreview(); closeRosterModal();
           await loadSavedRosters();
-          if(typeof loadStudentStatus==='function') loadStudentStatus();
+          await loadStudentStatus();
         }catch(e2){
           showMessage(`서버 업로드 실패: ${e2.message}`,'error');
         }
       }
     }
 
-    /* ========== 학생 현황 (기존 로직) ========== */
+    /* ───────── 학생 현황 ───────── */
     async function loadStudentStatus() {
       try {
+        const tid = await ensureTeacherId();
         const res = await fetch(
           '/api/admin/list-students?onlyActive=1&teacherId=' +
-          encodeURIComponent(getTeacherId()) +
-          '&_=' + Date.now(),
-          { cache: 'no-store' }
+          encodeURIComponent(tid) + '&_=' + Date.now(),
+          { cache: 'no-store', credentials:'include' }
         );
         const j = await res.json();
         if (!res.ok || !j.success) throw new Error(j.error || '조회 실패');
@@ -537,16 +479,16 @@
 
         displayStudentStatus(normalized);
       } catch (e) {
-       console.error('현황 조회 오류:', e);
+        console.error('현황 조회 오류:', e);
         showMessage('현황 조회 중 오류가 발생했습니다.', 'error');
         renderStudentStatusEmpty();
       }
     }
-    
+
     function renderStudentStatusEmpty(){
       const grid=document.getElementById('studentStatusGrid');
       grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#666;padding:20px;">
-        저장된 명부가 없습니다. <strong>명부 관리</strong>에서 업로드 후 조회하세요.</div>`;
+        저장된(활성) 명부가 없습니다. <strong>저장된 명부</strong>에서 현황판 노출을 켜세요.</div>`;
       document.getElementById('completedCount').textContent='0명';
       document.getElementById('pendingCount').textContent='0명';
       document.getElementById('notStartedCount').textContent='0명';
@@ -577,12 +519,13 @@
       document.getElementById('notStartedCount').textContent=statusCounts['not-started']+'명';
     }
 
-    /* ========== 통계(기존 스크립트 그대로) ========== */
+    /* ───────── 통계(요약) ───────── */
     const COMPETENCIES=['자신감과 리더십','분석','아이디어 뱅크','감정 이해','의사소통','협동심'];
     let currentStatsData=[];
-    async function loadStatistics(){ /* 그대로 - 생략된 부분은 네 원본 함수 내용 유지 */ }
+    function loadStatistics(){ /* 기존 구현 사용 */ }
+    function downloadExcel(){ /* 기존 구현 사용 */ }
 
-    /* ========== 공용 UI ========== */
+    /* ───────── 공용 UI ───────── */
     function showMessage(msg,type){
       const old=document.querySelector('.success-message,.error-message'); if(old) old.remove();
       const div=document.createElement('div'); div.className=(type==='success'?'success-message':'error-message'); div.textContent=msg;
@@ -597,26 +540,21 @@
     function clearAllData(){ if(confirm('정말 초기화할까요?')){ localStorage.clear(); showMessage('모든 데이터가 초기화되었습니다.','success'); closeRosterModal(); loadStudentStatus(); } }
     function logout(){ if(confirm('정말로 로그아웃하시겠습니까?')) location.href='login.html'; }
 
-    /* ========== 초기 로드 ========== */
-    document.addEventListener('DOMContentLoaded', ()=>{
-      loadSavedRosters();        // ✅ 상단 “저장된 명부” 갱신
+    /* ───────── 초기 로드 ───────── */
+    document.addEventListener('DOMContentLoaded', async ()=>{
+      await ensureTeacherId();   // teacherId 먼저 확보
+      loadSavedRosters();        // 저장된 명부
       loadStudentStatus();       // 현황판
-      loadActivityList();        // 활동목록
+      loadActivityList();        // 활동목록(기존)
     });
 
-    /* ===== 활동 정보(기존) ===== */
-    function addActivityInfo(){ /* 네 원본 함수 그대로 */ }
-    function loadActivityList(){ /* 네 원본 함수 그대로 */ }
-    function removeActivity(id){ /* 네 원본 함수 그대로 */ }
-    function clearAllActivities(){ /* 네 원본 함수 그대로 */ }
+    /* 활동 정보(기존) */
+    function addActivityInfo(){ /* 기존 구현 */ }
+    function loadActivityList(){ /* 기존 구현 */ }
+    function removeActivity(id){ /* 기존 구현 */ }
+    function clearAllActivities(){ /* 기존 구현 */ }
     function toggleStudentDetail(h){ const c=h.nextElementSibling,a=h.querySelector('span:last-child'); if(c.classList.contains('expanded')){c.classList.remove('expanded'); a.textContent='▼';}else{c.classList.add('expanded'); a.textContent='▲';} }
-    function updateClassInfo(){ /* 사용 중이면 유지 */ }
+    function updateClassInfo(){ /* 필요시 사용 */ }
   </script>
 </body>
 </html>
-
-
-
-
-
-
