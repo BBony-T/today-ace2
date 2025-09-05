@@ -234,12 +234,23 @@
 
       setBusy(btn, true);
       try {
-        // mode: 'student' 추가
-        await postJson('/api/auth/login', { mode: 'student', username, password });
+        // 1) 가장 권장: 같은 엔드포인트 + 모드 지정
+        let r = await tryReq('/api/auth/login', { username, password, mode: 'student' });
+
+        // 2) 실패 시: 같은 엔드포인트, 다른 키 조합
+        if (r._err) r = await tryReq('/api/auth/login', { studentId: username, name: password });
+        if (r._err) r = await tryReq('/api/auth/login', { id: username, fullname: password });
+
+        // 3) 서버가 학생 전용 엔드포인트를 쓸 경우
+        if (r._err) r = await tryReq('/api/auth/student-login', { username, password });
+        if (r._err) r = await tryReq('/api/auth/login-student', { studentId: username, name: password });
+
+        if (r._err) throw r._err;
+
         showMsg(msgBox, '로그인 성공! 학생 페이지로 이동합니다.', true);
         setTimeout(() => location.href = '/student.html', 700);
       } catch (err) {
-        showMsg(msgBox, err.message || '로그인 실패', false);
+        showMsg(msgBox, err.message || '로그인 실패(계정이 없거나 비밀번호가 일치하지 않습니다)', false);
       } finally {
         setBusy(btn, false);
       }
@@ -247,3 +258,4 @@
   </script>
 </body>
 </html>
+
