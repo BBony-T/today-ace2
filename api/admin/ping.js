@@ -1,26 +1,28 @@
 // /api/admin/ping.js
-import initAdmin from '../_shared/initAdmin.js';
-
-export const config = { runtime: 'nodejs' };
+import { db } from '../_fb.js';
 
 export default async function handler(req, res) {
   try {
-    // 환경변수 존재 여부만 Boolean으로 리턴 (값은 안보여줌)
-    const hasSA = !!process.env.FIREBASE_SERVICE_ACCOUNT;
-    const hasProject = !!process.env.FIREBASE_PROJECT_ID;
-    const hasEmail = !!process.env.FIREBASE_CLIENT_EMAIL;
-    const hasKey = !!process.env.FIREBASE_PRIVATE_KEY;
-    const hasToken = !!process.env.ADMIN_CREATE_TOKEN;
+    const env = {
+      hasSA: !!process.env.FIREBASE_SERVICE_ACCOUNT || !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+      hasProject: !!process.env.FIREBASE_PROJECT_ID,
+      hasEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+      hasKey: !!process.env.FIREBASE_PRIVATE_KEY,
+      hasToken: !!process.env.ADMIN_CREATE_TOKEN,
+    };
 
-    // 실제 admin 초기화 시도 (여기서 터지면 500 → 로그 확인)
-    initAdmin();
+    // 🔎 Firestore 실제 연결 테스트
+    let fb = { connected: false, collections: [] };
+    try {
+      const cols = await db().listCollections(); // 초기화/권한 문제면 여기서 에러
+      fb.connected = true;
+      fb.collections = cols.map(c => c.id);
+    } catch (e) {
+      fb.error = e?.message || String(e);
+    }
 
-    res.status(200).json({
-      ok: true,
-      env: { hasSA, hasProject, hasEmail, hasKey, hasToken }
-    });
+    return res.status(200).json({ ok: true, env, fb });
   } catch (e) {
-    console.error('PING ERROR:', e);
-    res.status(500).json({ ok: false, error: String(e && e.message) });
+    return res.status(500).json({ ok: false, error: e?.message || 'server error' });
   }
 }
