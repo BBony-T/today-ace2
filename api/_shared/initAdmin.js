@@ -1,30 +1,32 @@
 // /api/_shared/initAdmin.js
-import admin from 'firebase-admin';
+import jwt from 'jsonwebtoken';
+import cookie from 'cookie';
 
-export default function initAdmin() {
-  if (admin.apps.length) return admin.app();
+const SESSION_COOKIE = 'sess';
 
-  let creds;
-
-  // A) FIREBASE_SERVICE_ACCOUNT에 통짜 JSON이 있는 경우
-  const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (sa) {
-    const parsed = JSON.parse(sa);
-    if (parsed.private_key) parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
-    creds = parsed;
-  } else {
-    // B) 분리형 3변수 (project_id / client_email / private_key)
-    const project_id = process.env.FIREBASE_PROJECT_ID;
-    const client_email = process.env.FIREBASE_CLIENT_EMAIL;
-    let private_key = process.env.FIREBASE_PRIVATE_KEY;
-    if (!project_id || !client_email || !private_key) {
-      throw new Error('Firebase service account envs not set');
-    }
-    private_key = private_key.replace(/\\n/g, '\n');
-    creds = { project_id, client_email, private_key };
-  }
-
-  admin.initializeApp({ credential: admin.credential.cert(creds) });
-  return admin.app();
+export function setSessionCookie(res, payload, maxDays = 7) {
+  const token = jwt.sign(payload, process.env.SESSION_SECRET, { expiresIn: `${maxDays}d` });
+  res.setHeader('Set-Cookie', cookie.serialize(SESSION_COOKIE, token, {
+    httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60*60*24*maxDays,
+    // secure: true  // 배포시에 켜는 걸 추천
+  }));
 }
 
+export function clearSessionCookie(res) {
+  res.setHeader('Set-Cookie', cookie.serialize(SESSION_COOKIE, '', {
+    httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0
+  }));
+}
+
+export function getUserFromReq(req) {
+  try {
+    const hdr = req.headers.cookie || '';
+    const cookies = cookie.parse(hdr || '');
+    const token = cookies[SESSION_COOKIE];
+    if (!token) return null;
+    return jwt.verify(token, process.env.SESSION_SECRET);
+  } catch (_) { return null; }
+}
+
+// 라우트에서 사용: const me = getUserFromReq(req);
+// me = { uid, role, teacherId, email, name }
