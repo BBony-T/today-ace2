@@ -1,0 +1,57 @@
+<!doctype html>
+<label>이름</label>
+<input id="name" placeholder="홍길동" />
+
+
+<label>이메일</label>
+<input id="email" placeholder="t1@school.kr" />
+
+
+<label>비밀번호</label>
+<input id="password" type="password" placeholder="비밀번호" />
+
+
+<label>초대코드 (선택)</label>
+<input id="invite" placeholder="있으면 입력" />
+
+
+<button id="btn">가입하기</button>
+<div id="msg" class="msg"></div>
+<p style="margin-top:18px">이미 계정이 있나요? <a href="/login.html">로그인</a></p>
+
+
+<script>
+async function postJson(url, data){
+const res = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+const t = await res.text();
+let j={}; try{ if(t) j = JSON.parse(t); }catch{}
+if(!res.ok || j.success===false){ throw new Error(j.error || res.status+' '+res.statusText); }
+return j;
+}
+
+
+document.getElementById('btn').onclick = async () => {
+const name = nameEl.value.trim();
+const email = emailEl.value.trim();
+const password = passwordEl.value.trim();
+const inviteCode = inviteEl.value.trim();
+const msg = m => (msgEl.className='msg ok', msgEl.textContent=m);
+const err = m => (msgEl.className='msg err', msgEl.textContent=m);
+
+
+if(!name||!email||!password) return err('이름/이메일/비밀번호를 입력하세요');
+try{
+const r = await postJson('/api/auth/teacher-signup',{name,email,password,inviteCode});
+msg(`가입 완료! 상태: ${r.status} / teacherId: ${r.teacherId}`);
+}catch(e){ err(e.message); }
+};
+
+
+const nameEl=document.getElementById('name');
+const emailEl=document.getElementById('email');
+const passwordEl=document.getElementById('password');
+const inviteEl=document.getElementById('invite');
+const msgEl=document.getElementById('msg');
+</script>
+</body>
+</html>
