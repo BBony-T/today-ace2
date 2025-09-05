@@ -17,7 +17,6 @@
       position: relative;
       overflow: hidden;
     }
-    /* 장식 배경 (기존 테마 유지) */
     body::before {
       content: '';
       position: absolute;
@@ -62,42 +61,23 @@
     .logo h1 { color:#2d3748; font-size:32px; font-weight:bold; margin-bottom:6px; }
     .logo p  { color:#4a5568; font-size:15px; font-weight:500; }
 
-    /* 탭 */
-    .tabs {
-      display:flex; gap:8px; justify-content:center;
-      margin: 14px 0 18px;
-    }
+    .tabs { display:flex; gap:8px; justify-content:center; margin: 14px 0 18px; }
     .tab {
-      flex:1;
-      background:#fffef7;
-      border:2px solid #ffd93d;
-      color:#4a5568;
-      padding:10px 12px;
-      border-radius: 999px;
-      font-weight:700;
-      cursor:pointer;
-      transition:.2s;
-      user-select:none;
+      flex:1; background:#fffef7; border:2px solid #ffd93d; color:#4a5568;
+      padding:10px 12px; border-radius: 999px; font-weight:700; cursor:pointer;
+      transition:.2s; user-select:none;
     }
     .tab:hover { background:#fff3bf; }
-    .tab.on {
-      background:#ffd93d;
-      color:#2d3748;
-      box-shadow: 0 10px 20px rgba(255, 217, 61, 0.35);
-    }
+    .tab.on { background:#ffd93d; color:#2d3748; box-shadow: 0 10px 20px rgba(255, 217, 61, 0.35); }
 
     .input-group { margin-bottom: 16px; text-align:left; }
-    .input-group label {
-      display:block; color:#2d3748; font-weight:600; margin-bottom:8px; font-size:14px;
-    }
+    .input-group label { display:block; color:#2d3748; font-weight:600; margin-bottom:8px; font-size:14px; }
     .input-group input {
-      width:100%; padding:14px;
-      border:2px solid #ffd93d; border-radius:15px; font-size:16px;
+      width:100%; padding:14px; border:2px solid #ffd93d; border-radius:15px; font-size:16px;
       transition: all .25s ease; background:#fffef7;
     }
     .input-group input:focus {
-      outline:none; border-color:#ffb700;
-      box-shadow:0 0 0 3px rgba(255, 217, 61, .2); background:#fff;
+      outline:none; border-color:#ffb700; box-shadow:0 0 0 3px rgba(255, 217, 61, .2); background:#fff;
     }
 
     .login-button {
@@ -105,31 +85,19 @@
       padding:16px; border-radius:15px; font-size:16px; font-weight:700;
       cursor:pointer; transition:.25s; margin-top:6px;
     }
-    .login-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 15px 30px rgba(255, 217, 61, 0.4);
-      background:#ffb700;
-    }
+    .login-button:hover { transform: translateY(-2px); box-shadow: 0 15px 30px rgba(255, 217, 61, 0.4); background:#ffb700; }
     .login-button:active { transform: translateY(0); }
 
-    .helper-row {
-      display:flex; justify-content:space-between; align-items:center;
-      margin-top: 10px; font-size:14px;
-    }
+    .helper-row { display:flex; justify-content:space-between; align-items:center; margin-top: 10px; font-size:14px; }
     .link { color:#6c5ce7; text-decoration:none; font-weight:700; }
     .link:hover { text-decoration:underline; }
 
-    .status-message {
-      margin-top: 14px; padding: 10px; border-radius: 10px; font-size: 14px; display:none;
-      border:2px solid transparent;
-    }
+    .status-message { margin-top: 14px; padding: 10px; border-radius: 10px; font-size: 14px; display:none; border:2px solid transparent; }
     .success { background:#e6fffa; color:#234e52; border-color:#81e6d9; }
     .error   { background:#ffe6e6; color:#c53030; border-color:#fc8181; }
 
-    /* 작은 주석 라벨 */
     .hint { color:#6b7280; font-size:12px; margin-top:6px; text-align:left; }
 
-    /* 반응형 */
     @media (max-width: 420px) {
       .logo h1 { font-size:28px; }
       .tabs { gap:6px; }
@@ -185,7 +153,7 @@
   </div>
 
   <script>
-    // 탭 전환
+    // ───────── 탭 전환 ─────────
     const tabT = document.getElementById('tabT');
     const tabS = document.getElementById('tabS');
     const formT = document.getElementById('formT');
@@ -201,11 +169,13 @@
     tabT.onclick = () => selectTab('T');
     tabS.onclick = () => selectTab('S');
 
-    // 공통 유틸
+    // ───────── 공통 유틸 ─────────
     async function postJson(url, data) {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',     // 세션 쿠키 포함
+        cache: 'no-store',
         body: JSON.stringify(data)
       });
       const text = await res.text();
@@ -229,7 +199,7 @@
       else { btn.textContent = btn.getAttribute('data-prev') || '로그인'; btn.removeAttribute('data-prev'); }
     }
 
-    // 선생님/수퍼 로그인
+    // ───────── 선생님/수퍼 로그인 ─────────
     document.getElementById('formT').addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = document.getElementById('tEmail').value.trim();
@@ -241,8 +211,8 @@
 
       setBusy(btn, true);
       try {
-        // NOTE: 백엔드 라우트는 /api/auth/login 을 사용합니다.
-        const r = await postJson('/api/auth/login', { email, password });
+        // mode: 'teacher' 추가
+        await postJson('/api/auth/login', { mode: 'teacher', email, password });
         showMsg(msgBox, '로그인 성공! 관리자 페이지로 이동합니다.', true);
         setTimeout(() => location.href = '/admin.html', 700);
       } catch (err) {
@@ -252,7 +222,7 @@
       }
     });
 
-    // 학생 로그인
+    // ───────── 학생 로그인 ─────────
     document.getElementById('formS').addEventListener('submit', async (e) => {
       e.preventDefault();
       const username = document.getElementById('sId').value.trim();
@@ -264,7 +234,8 @@
 
       setBusy(btn, true);
       try {
-        const r = await postJson('/api/auth/login', { username, password });
+        // mode: 'student' 추가
+        await postJson('/api/auth/login', { mode: 'student', username, password });
         showMsg(msgBox, '로그인 성공! 학생 페이지로 이동합니다.', true);
         setTimeout(() => location.href = '/student.html', 700);
       } catch (err) {
