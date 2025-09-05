@@ -1,57 +1,244 @@
-<!doctype html>
-<label>이름</label>
-<input id="name" placeholder="홍길동" />
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>오늘의 에이스는? - 선생님 회원가입</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{
+      font-family: 'Arial',sans-serif;
+      background:#fff8f0;
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      overflow:hidden;
+    }
+    /* 장식 배경 (index.html과 톤 맞춤) */
+    body::before{
+      content:'';
+      position:absolute; top:-50px; left:-50px;
+      width:150px; height:150px;
+      background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20 50 L35 25 L65 25 L80 50 L65 75 L35 75 Z" fill="%23ffd93d"/></svg>');
+      background-size:contain; background-repeat:no-repeat; opacity:.6; z-index:0;
+    }
+    body::after{
+      content:'';
+      position:absolute; bottom:-30px; right:-30px;
+      width:120px; height:120px;
+      background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 10 C70 20, 90 40, 80 60 C70 80, 30 80, 20 60 C10 40, 30 20, 50 10 Z" fill="%23c77dff"/></svg>');
+      background-size:contain; background-repeat:no-repeat; opacity:.5; z-index:0;
+    }
 
+    .card{
+      width:min(520px,94%);
+      background:#fff;
+      border:3px solid #ffe0b3;
+      border-radius:22px;
+      box-shadow:0 18px 36px rgba(255,217,61,.22);
+      padding:28px 24px 22px;
+      position:relative; z-index:1;
+    }
+    .title{ text-align:center; margin-bottom:6px }
+    .title h1{ font-size:28px; color:#2d3748 }
+    .title p{ color:#4a5568; margin-top:6px }
 
-<label>이메일</label>
-<input id="email" placeholder="t1@school.kr" />
+    .form{
+      margin-top:16px;
+      display:grid;
+      gap:12px;
+    }
+    .field{ display:grid; gap:6px }
+    .label{ font-weight:700; color:#2d3748; font-size:14px }
+    .input{
+      width:100%;
+      padding:12px 14px;
+      border:2px solid #ffd93d;
+      border-radius:12px;
+      background:#fffef7;
+      font-size:15px; color:#1f2937;
+      transition:border-color .2s, box-shadow .2s, background .2s;
+    }
+    .input:focus{
+      outline:none;
+      border-color:#ffb700;
+      background:#fff;
+      box-shadow:0 0 0 3px rgba(255,217,61,.22);
+    }
+    .row{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+    .pw-wrap{ position:relative }
+    .toggle{
+      position:absolute; right:10px; top:50%; transform:translateY(-50%);
+      border:none; background:#fff3bf; color:#2d3748; font-size:12px;
+      padding:6px 8px; border-radius:999px; cursor:pointer;
+    }
 
+    .hint{ font-size:12px; color:#6b7280; margin-top:4px }
 
-<label>비밀번호</label>
-<input id="password" type="password" placeholder="비밀번호" />
+    .btn{
+      width:100%;
+      margin-top:8px;
+      padding:14px;
+      border:none;
+      background:#ffd93d;
+      color:#2d3748;
+      font-weight:800;
+      border-radius:14px;
+      cursor:pointer; transition:.2s;
+    }
+    .btn:hover{ background:#ffb700; transform:translateY(-1px); box-shadow:0 14px 28px rgba(255,217,61,.35) }
+    .btn[disabled]{ opacity:.6; cursor:default; transform:none; box-shadow:none }
 
+    .msg{
+      margin:12px 0 2px;
+      display:none;
+      padding:10px 12px;
+      border:2px solid transparent;
+      border-radius:12px;
+      font-size:14px;
+    }
+    .msg.ok{ display:block; background:#e6fffa; color:#234e52; border-color:#81e6d9 }
+    .msg.err{ display:block; background:#ffe6e6; color:#c53030; border-color:#fc8181 }
 
-<label>초대코드 (선택)</label>
-<input id="invite" placeholder="있으면 입력" />
+    .foot{
+      display:flex; justify-content:space-between; align-items:center;
+      margin-top:12px; font-size:13px;
+      color:#6b7280;
+    }
+    .link{ color:#6c5ce7; font-weight:800; text-decoration:none }
+    .link:hover{ text-decoration:underline }
 
+    @media (max-width:520px){
+      .row{ grid-template-columns:1fr }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="title">
+      <h1>🌟 선생님 회원가입</h1>
+      <p>따뜻한 마음으로 함께 성장해요!</p>
+    </div>
 
-<button id="btn">가입하기</button>
-<div id="msg" class="msg"></div>
-<p style="margin-top:18px">이미 계정이 있나요? <a href="/login.html">로그인</a></p>
+    <div id="msg" class="msg"></div>
 
+    <form id="form" class="form">
+      <div class="field">
+        <label class="label" for="name">이름</label>
+        <input class="input" id="name" placeholder="예) 김교사" autocomplete="name"/>
+      </div>
 
-<script>
-async function postJson(url, data){
-const res = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-const t = await res.text();
-let j={}; try{ if(t) j = JSON.parse(t); }catch{}
-if(!res.ok || j.success===false){ throw new Error(j.error || res.status+' '+res.statusText); }
-return j;
-}
+      <div class="field">
+        <label class="label" for="email">이메일</label>
+        <input class="input" id="email" type="email" placeholder="예) t1@school.kr" autocomplete="username"/>
+      </div>
 
+      <div class="row">
+        <div class="field pw-wrap">
+          <label class="label" for="pass">비밀번호</label>
+          <input class="input" id="pass" type="password" placeholder="비밀번호" autocomplete="new-password"/>
+          <button class="toggle" type="button" data-target="pass">보기</button>
+        </div>
+        <div class="field pw-wrap">
+          <label class="label" for="pass2">비밀번호 확인</label>
+          <input class="input" id="pass2" type="password" placeholder="비밀번호 확인" autocomplete="new-password"/>
+          <button class="toggle" type="button" data-target="pass2">보기</button>
+        </div>
+      </div>
 
-document.getElementById('btn').onclick = async () => {
-const name = nameEl.value.trim();
-const email = emailEl.value.trim();
-const password = passwordEl.value.trim();
-const inviteCode = inviteEl.value.trim();
-const msg = m => (msgEl.className='msg ok', msgEl.textContent=m);
-const err = m => (msgEl.className='msg err', msgEl.textContent=m);
+      <!-- 필요 시 초대코드를 쓰는 경우를 대비해 선택 입력 -->
+      <div class="field">
+        <label class="label" for="invite">초대코드(선택)</label>
+        <input class="input" id="invite" placeholder="선택 입력"/>
+        <div class="hint">※ 초대코드가 없으면 자동 승인 설정이 적용됩니다.</div>
+      </div>
 
+      <button id="btn" class="btn" type="submit">가입하기</button>
+    </form>
 
-if(!name||!email||!password) return err('이름/이메일/비밀번호를 입력하세요');
-try{
-const r = await postJson('/api/auth/teacher-signup',{name,email,password,inviteCode});
-msg(`가입 완료! 상태: ${r.status} / teacherId: ${r.teacherId}`);
-}catch(e){ err(e.message); }
-};
+    <div class="foot">
+      <span>이미 계정이 있으신가요?</span>
+      <a class="link" href="/index.html">로그인</a>
+    </div>
+  </div>
 
+  <script>
+    // 비밀번호 보기/숨기기
+    document.querySelectorAll('.toggle').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const id = btn.getAttribute('data-target');
+        const inp = document.getElementById(id);
+        if(!inp) return;
+        inp.type = (inp.type === 'password') ? 'text' : 'password';
+        btn.textContent = (inp.type === 'password') ? '보기' : '숨김';
+      });
+    });
 
-const nameEl=document.getElementById('name');
-const emailEl=document.getElementById('email');
-const passwordEl=document.getElementById('password');
-const inviteEl=document.getElementById('invite');
-const msgEl=document.getElementById('msg');
-</script>
+    function showMsg(ok, text){
+      const m = document.getElementById('msg');
+      m.className = 'msg ' + (ok ? 'ok' : 'err');
+      m.textContent = text;
+      m.style.display = 'block';
+      if (!ok) setTimeout(()=>{ m.style.display='none'; }, 3500);
+    }
+
+    async function postJson(url, body){
+      const r = await fetch(url, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'include',
+        cache:'no-store',
+        body:JSON.stringify(body||{})
+      });
+      const txt = await r.text();
+      let j={}; try{ if(txt) j = JSON.parse(txt); }catch(_){}
+      if(!r.ok || j.success===false) throw new Error(j.error || ('HTTP '+r.status));
+      return j;
+    }
+
+    function setBusy(on){
+      const b = document.getElementById('btn');
+      if(on){ b.disabled = true; b.setAttribute('data-prev', b.textContent); b.textContent = '처리 중…'; }
+      else{ b.disabled = false; b.textContent = b.getAttribute('data-prev') || '가입하기'; b.removeAttribute('data-prev'); }
+    }
+
+    document.getElementById('form').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const name  = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const pass  = document.getElementById('pass').value;
+      const pass2 = document.getElementById('pass2').value;
+      const inviteCode = document.getElementById('invite').value.trim();
+
+      // 간단 검증
+      if(!name || !email || !pass) return showMsg(false, '이름, 이메일, 비밀번호를 입력하세요.');
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return showMsg(false, '이메일 형식이 올바르지 않습니다.');
+      if(pass.length < 4) return showMsg(false, '비밀번호는 4자 이상으로 설정하세요.');
+      if(pass !== pass2) return showMsg(false, '비밀번호 확인이 일치하지 않습니다.');
+
+      setBusy(true);
+      try{
+        const res = await postJson('/api/auth/teacher-signup', { name, email, password:pass, inviteCode });
+        // status: active/pending
+        if(res.status === 'active'){
+          showMsg(true, '가입되었습니다! 지금 로그인할 수 있어요.');
+        }else{
+          showMsg(true, '가입 신청이 접수되었습니다. 승인 후 로그인 가능합니다.');
+        }
+        // 1.5초 뒤 로그인으로 이동
+        setTimeout(()=>location.href='/index.html', 1500);
+      }catch(err){
+        showMsg(false, err.message || '회원가입에 실패했습니다.');
+      }finally{
+        setBusy(false);
+      }
+    });
+  </script>
 </body>
 </html>
