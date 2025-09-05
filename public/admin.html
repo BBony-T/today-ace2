@@ -304,7 +304,16 @@
       });
       return el;
     }
-
+     
+    function getTeacherId() {
+      // 로그인 시 세션에 넣어둔 값 사용 (사용 중인 키 이름에 맞춰 하나라도 있으면 OK)
+      return (
+        sessionStorage.getItem('teacherId') ||
+        sessionStorage.getItem('username') ||  // 예: nightmoon@korea.kr
+        ''
+      );
+    }
+    
     async function loadSavedRosters() {
       const box = document.getElementById('rosterList');   // ← 기존 savedRosters → rosterList
       if (!box) return;
@@ -312,7 +321,8 @@
       box.innerHTML = '<div style="padding:8px;color:#666">저장된 명부를 불러오는 중…</div>';
 
       try {
-        const { rosters } = await getJson('/api/admin/list-rosters');
+        const { rosters } = await getJson('/api/admin/list-rosters?teacherId=' +
+                                  encodeURIComponent(getTeacherId()));
 
         if (!rosters || rosters.length === 0) {
           box.innerHTML = '<div style="padding:8px;color:#999">저장된 명부 없음</div>';
@@ -352,10 +362,10 @@
           el.onchange = async () => {
             el.disabled = true;
             try {
-              await postJson('/api/admin/publish-roster', {
-                rosterId: el.dataset.id,
-                publish: el.checked
-              });
+              await postJson(
+                '/api/admin/publish-roster?teacherId=' + encodeURIComponent(getTeacherId()),
+                { rosterId: el.dataset.id, publish: el.checked }
+              );
               // 활성 명부가 바뀌었으니 현황판 갱신
               await loadStudentStatus();
             } catch (e) {
@@ -373,7 +383,10 @@
             if (!confirm('이 명부를 삭제하시겠습니까?')) return;
             btn.disabled = true;
             try {
-              await postJson('/api/admin/delete-roster', { rosterId: btn.dataset.id });
+              await postJson(
+                '/api/admin/delete-roster?teacherId=' + encodeURIComponent(getTeacherId()),
+                { rosterId: btn.dataset.id }
+              );
               await loadSavedRosters();   // 목록 갱신
               await loadStudentStatus();  // 현황판 갱신
             } catch (e) {
@@ -480,7 +493,12 @@
     /* ========== 학생 현황 (기존 로직) ========== */
     async function loadStudentStatus() {
       try {
-        const res = await fetch('/api/admin/list-students?onlyActive=1&_=' + Date.now(), { cache: 'no-store' });
+        const res = await fetch(
+          '/api/admin/list-students?onlyActive=1&teacherId=' +
+          encodeURIComponent(getTeacherId()) +
+          '&_=' + Date.now(),
+          { cache: 'no-store' }
+        );
         const j = await res.json();
         if (!res.ok || !j.success) throw new Error(j.error || '조회 실패');
 
@@ -576,6 +594,7 @@
   </script>
 </body>
 </html>
+
 
 
 
