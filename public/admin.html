@@ -398,7 +398,7 @@
       }));
 
       try{
-        await postJson('/api/admin/import-students',{ skipExisting:true, roster });
+        await postJson('/api/admin/import-students',{ skipExisting:true, categoryType: type, categoryName: name, roster });
         showMessage(`명부가 저장되었습니다. (총 ${roster.length}명)`, 'success');
         UP.preview=[]; renderPreview(); closeRosterModal();
         await loadSavedRosters();
@@ -507,4 +507,5 @@
   </script>
 </body>
 </html>
+
 
