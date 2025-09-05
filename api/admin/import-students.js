@@ -1,6 +1,8 @@
 // /api/admin/import-students.js
 import { db } from '../_fb.js';
 import admin from 'firebase-admin';
+// ⬇️ 로그인 사용자(교사/수퍼) 정보 읽기 – 경로 다르면 맞게 수정
+import { getUserFromReq } from '../_shared/initAdmin.js';
 
 export default async function handler(req, res) {
   try {
@@ -30,6 +32,8 @@ export default async function handler(req, res) {
       skipExisting = true,
       categoryType = '',
       categoryName = '',
+      // ⬇️ (선택) 수퍼가 다른 교사 보드에 넣고 싶을때 바디로 teacherId를 넘길 수 있게
+      teacherId: teacherIdFromBody
     } = payload;
 
     console.log('[import-students] roster length =', Array.isArray(roster) ? roster.length : 'N/A');
@@ -37,6 +41,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ success:false, error:'명부(roster) 배열이 필요합니다.' });
     }
     console.log('[import-students] sample[0] =', roster[0]);
+
+    // ⬇️ 현재 로그인 사용자 기준 teacherId 결정(수퍼면 body 값 우선)
+    const me = getUserFromReq?.(req) || null;
+    const teacherId =
+      teacherIdFromBody ||
+      me?.teacherId || me?.uid || me?.email || 'T_DEFAULT';
+    const teacherEmail = me?.email || '';
 
     const col = db().collection('students');
 
@@ -53,7 +64,7 @@ export default async function handler(req, res) {
     let batch = db().batch();
     let ops = 0;
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const nowTS = admin.firestore.FieldValue.serverTimestamp();
 
     for (const s of roster) {
       // 다양한 키 지원: name/이름, studentId/id/학번
@@ -68,17 +79,18 @@ export default async function handler(req, res) {
       const docRef = col.doc(docId);
       const data = {
         username: docId,             // 로그인 아이디로 학번 사용
-        password: name,              // 임시: 이름
+        password: name,              // 임시: 이름(요구사항대로 해시 없음)
         name,
         studentId: docId,
-        klass: s.class || s.klass || s['반'] || '',  // class는 예약어 아님이지만 혼동 줄이기
+        klass: s.class || s.klass || s['반'] || '',
         year: s.year || s['학년'] || '',
         subject: s.subject || '',
         club: s.club || '',
         categoryType: categoryType || s.categoryType || '',
         categoryName: categoryName || s.categoryName || '',
-        updatedAt: now,
-        createdAt: now,
+        teacherId,                   // ⬅️ 소유 교사 식별자 저장(필요 시 필터에 사용 가능)
+        updatedAt: nowTS,
+        createdAt: nowTS,
       };
 
       batch.set(docRef, data, { merge: true });
@@ -95,8 +107,29 @@ export default async function handler(req, res) {
 
     if (ops > 0) await batch.commit();
 
-    console.log('[import-students] importedCount =', imported.length);
-    return res.status(200).json({ success: true, importedCount: imported.length, imported });
+    // ✅ 추가: "저장된 명부"에 노출될 메타 문서 기록
+    // rosters 컬렉션에 1건 생성 → /api/admin/list-rosters 가 이걸 읽어 목록에 출력
+    const rosterDoc = {
+      teacherId,
+      teacherEmail,
+      type: categoryType || 'roster',
+      name: categoryName || '',
+      title: categoryName || `${categoryType || '명부'} 업로드`,
+      studentCount: imported.length,
+      published: false,
+      createdAt: nowTS,
+      updatedAt: nowTS,
+    };
+    const rosterRef = await db().collection('rosters').add(rosterDoc);
+
+    console.log('[import-students] importedCount =', imported.length, ' rosterId =', rosterRef.id);
+    return res.status(200).json({
+      success: true,
+      importedCount: imported.length,
+      imported,
+      rosterId: rosterRef.id,
+      roster: rosterDoc
+    });
   } catch (e) {
     console.error('[import-students] error:', e);
     return res.status(500).json({ success:false, error: e?.message || 'server error' });
