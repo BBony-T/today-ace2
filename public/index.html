@@ -169,6 +169,14 @@
     tabT.onclick = () => selectTab('T');
     tabS.onclick = () => selectTab('S');
 
+    async function tryReq(url, body) {
+      try {
+        return await postJson(url, body);
+      } catch (e) {
+        return { __err: e };  // 실패를 값으로 돌려줌
+      }
+    }
+    
     // ───────── 공통 유틸 ─────────
     async function postJson(url, data) {
       const res = await fetch(url, {
@@ -234,18 +242,18 @@
 
       setBusy(btn, true);
       try {
-        // 1) 가장 권장: 같은 엔드포인트 + 모드 지정
+        // 1) 권장: 같은 엔드포인트 + 모드 지정
         let r = await tryReq('/api/auth/login', { username, password, mode: 'student' });
 
         // 2) 실패 시: 같은 엔드포인트, 다른 키 조합
-        if (r._err) r = await tryReq('/api/auth/login', { studentId: username, name: password });
-        if (r._err) r = await tryReq('/api/auth/login', { id: username, fullname: password });
+        if (r.__err) r = await tryReq('/api/auth/login', { studentId: username, name: password });
+        if (r.__err) r = await tryReq('/api/auth/login', { id: username, fullname: password });
 
-        // 3) 서버가 학생 전용 엔드포인트를 쓸 경우
-        if (r._err) r = await tryReq('/api/auth/student-login', { username, password });
-        if (r._err) r = await tryReq('/api/auth/login-student', { studentId: username, name: password });
+        // 3) 학생 전용 엔드포인트가 따로 있는 경우
+        if (r.__err) r = await tryReq('/api/auth/student-login', { username, password });
+        if (r.__err) r = await tryReq('/api/auth/login-student', { studentId: username, name: password });
 
-        if (r._err) throw r._err;
+        if (r.__err) throw r.__err;
 
         showMsg(msgBox, '로그인 성공! 학생 페이지로 이동합니다.', true);
         setTimeout(() => location.href = '/student.html', 700);
@@ -258,3 +266,4 @@
   </script>
 </body>
 </html>
+
