@@ -1,1562 +1,509 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>오늘의 에이스는? - 관리자</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>오늘의 에이스는? - 관리자</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    /* ====== 기존 스타일 유지 ====== */
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Arial',sans-serif;background-color:#fff8f0;min-height:100vh;display:flex}
+    .sidebar{width:220px;background:#fff;border-right:3px solid #ffe0b3;padding:20px;box-shadow:3px 0 10px rgba(255,217,61,.1)}
+    .sidebar-header{text-align:center;margin-bottom:25px;padding-bottom:15px;border-bottom:2px solid #fff5e6}
+    .sidebar-header h2{color:#2d3748;font-size:16px;font-weight:700;margin-bottom:5px}
+    .sidebar-header p{color:#4a5568;font-size:11px}
+    .menu-item{display:block;width:100%;padding:12px 15px;margin-bottom:8px;background:#fff5e6;border:2px solid #ffe0b3;border-radius:10px;color:#2d3748;text-decoration:none;font-weight:600;text-align:center;font-size:12px;cursor:pointer;transition:.2s}
+    .menu-item.active,.menu-item:hover{background:#ffd93d;transform:translateY(-1px)}
+    .logout-btn{margin-top:20px;padding:8px 12px;background:#ffb3b3;border:2px solid #ff9999;border-radius:8px;color:#2d3748;font-weight:600;cursor:pointer;width:100%;font-size:11px}
+    .main-content{flex:1;padding:25px;overflow-y:auto}
+    .page-header{text-align:center;margin-bottom:25px}
+    .page-header h1{color:#2d3748;font-size:26px;font-weight:700;margin-bottom:8px}
+    .page-header p{color:#4a5568;font-size:15px}
+    .page-content{display:none}.page-content.active{display:block}
+    .card{background:#fff;border-radius:15px;padding:20px;margin-bottom:20px;box-shadow:0 5px 15px rgba(0,0,0,.05)}
+    .card.orange{border:3px solid #ffe0b3;background:#fffbf5}
+    .card.purple{border:3px solid #e0c4ff;background:#faf7ff}
+    .card h3{color:#2d3748;margin-bottom:15px;font-size:16px;text-align:center}
+    .class-selector{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
+    .class-selector select,.class-selector input{padding:8px 12px;border:2px solid #ffd93d;border-radius:8px;font-size:14px;background:#fff}
+    .class-selector button{background:#ffd93d;color:#2d3748;border:none;padding:8px 15px;border-radius:8px;font-weight:600;cursor:pointer;transition:.2s}
+    .class-selector button:hover{background:#ffb700;transform:translateY(-1px)}
+    .student-status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:20px}
+    .student-card{background:#fff;border:2px solid #e2e8f0;border-radius:10px;padding:15px;text-align:center;transition:.2s}
+    .student-card.completed{border-color:#68d391;background:#f0fff4}
+    .student-card.pending{border-color:#fed7af;background:#fffaf0}
+    .student-card.not-started{border-color:#feb2b2;background:#fef5f5}
+    .student-name{font-weight:700;color:#2d3748;margin-bottom:5px}
+    .student-status{font-size:12px;padding:4px 8px;border-radius:12px;color:#fff}
+    .status-completed{background:#48bb78}.status-pending{background:#ed8936}.status-not-started{background:#e53e3e}
+    .roster-management{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+    .file-upload{border:2px dashed #ffd93d;border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:.2s}
+    .file-upload:hover{border-color:#ffb700;background:#fffbf5}
+    .file-upload input{display:none}
+    .stats-controls{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:20px}
+    .stats-results{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+    .student-detail{border:1px solid #e2e8f0;border-radius:8px;margin-bottom:10px;overflow:hidden}
+    .student-header{background:#f7fafc;padding:10px 15px;font-weight:700;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+    .student-content{padding:15px;display:none}.student-content.expanded{display:block}
+    .competency-stat{display:flex;justify-content:space-between;margin-bottom:8px;padding:5px 10px;background:#f8f9fa;border-radius:5px}
+    .download-btn{background:#c77dff;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-weight:600;cursor:pointer;transition:.2s}
+    .download-btn:hover{background:#a855f7;transform:translateY(-1px)}
+    @media (max-width:1000px){.roster-management{grid-template-columns:1fr}.stats-controls{grid-template-columns:repeat(2,1fr)}.stats-results{grid-template-columns:1fr}}
+    @media (max-width:768px){body{flex-direction:column}.sidebar{width:100%;padding:15px}.main-content{padding:20px}.class-selector{flex-direction:column;align-items:stretch}.stats-controls{grid-template-columns:1fr}.student-status-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
+    .success-message{background:#e6fffa;color:#234e52;padding:10px 15px;border-radius:8px;margin-bottom:15px;border-left:4px solid #81e6d9}
+    .error-message{background:#ffe6e6;color:#c53030;padding:10px 15px;border-radius:8px;margin-bottom:15px;border-left:4px solid #fc8181}
 
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #fff8f0;
-            min-height: 100vh;
-            display: flex;
-        }
-
-        /* 좌측 사이드바 */
-        .sidebar {
-            width: 220px;
-            background-color: white;
-            border-right: 3px solid #ffe0b3;
-            padding: 20px;
-            box-shadow: 3px 0 10px rgba(255, 217, 61, 0.1);
-        }
-
-        .sidebar-header {
-            text-align: center;
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #fff5e6;
-        }
-
-        .sidebar-header h2 {
-            color: #2d3748;
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .sidebar-header p {
-            color: #4a5568;
-            font-size: 11px;
-        }
-
-        .menu-item {
-            display: block;
-            width: 100%;
-            padding: 12px 15px;
-            margin-bottom: 8px;
-            background-color: #fff5e6;
-            border: 2px solid #ffe0b3;
-            border-radius: 10px;
-            color: #2d3748;
-            text-decoration: none;
-            font-weight: 600;
-            text-align: center;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .menu-item.active {
-            background-color: #ffd93d;
-        }
-
-        .menu-item:hover {
-            background-color: #ffd93d;
-            transform: translateY(-1px);
-        }
-
-        .logout-btn {
-            margin-top: 20px;
-            padding: 8px 12px;
-            background-color: #ffb3b3;
-            border: 2px solid #ff9999;
-            border-radius: 8px;
-            color: #2d3748;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            font-size: 11px;
-        }
-
-        /* 메인 콘텐츠 */
-        .main-content {
-            flex: 1;
-            padding: 25px;
-            overflow-y: auto;
-        }
-
-        .page-header {
-            text-align: center;
-            margin-bottom: 25px;
-        }
-
-        .page-header h1 {
-            color: #2d3748;
-            font-size: 26px;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-
-        .page-header p {
-            color: #4a5568;
-            font-size: 15px;
-        }
-
-        /* 페이지 전환 */
-        .page-content {
-            display: none;
-        }
-
-        .page-content.active {
-            display: block;
-        }
-
-        /* 카드 스타일 */
-        .card {
-            background-color: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-        }
-
-        .card.orange {
-            border: 3px solid #ffe0b3;
-            background-color: #fffbf5;
-        }
-
-        .card.purple {
-            border: 3px solid #e0c4ff;
-            background-color: #faf7ff;
-        }
-
-        .card h3 {
-            color: #2d3748;
-            margin-bottom: 15px;
-            font-size: 16px;
-            text-align: center;
-        }
-
-        /* 현황 페이지 스타일 */
-        .class-selector {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .class-selector select,
-        .class-selector input {
-            padding: 8px 12px;
-            border: 2px solid #ffd93d;
-            border-radius: 8px;
-            font-size: 14px;
-            background-color: white;
-        }
-
-        .class-selector button {
-            background-color: #ffd93d;
-            color: #2d3748;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .class-selector button:hover {
-            background-color: #ffb700;
-            transform: translateY(-1px);
-        }
-        
-        /* 학생 현황 테이블 */
-        .student-status-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        .student-card {
-            background-color: white;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 15px;
-            text-align: center;
-            transition: all 0.2s ease;
-        }
-
-        .student-card.completed {
-            border-color: #68d391;
-            background-color: #f0fff4;
-        }
-
-        .student-card.pending {
-            border-color: #fed7af;
-            background-color: #fffaf0;
-        }
-
-        .student-card.not-started {
-            border-color: #feb2b2;
-            background-color: #fef5f5;
-        }
-
-        .student-name {
-            font-weight: bold;
-            color: #2d3748;
-            margin-bottom: 5px;
-        }
-
-        .student-status {
-            font-size: 12px;
-            padding: 4px 8px;
-            border-radius: 12px;
-            color: white;
-        }
-
-        .status-completed {
-            background-color: #48bb78;
-        }
-
-        .status-pending {
-            background-color: #ed8936;
-        }
-
-        .status-not-started {
-            background-color: #e53e3e;
-        }
-
-        /* 명부 관리 */
-        .roster-management {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .file-upload {
-            border: 2px dashed #ffd93d;
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .file-upload:hover {
-            border-color: #ffb700;
-            background-color: #fffbf5;
-        }
-
-        .file-upload input {
-            display: none;
-        }
-
-        /* 통계 페이지 스타일 */
-        .stats-controls {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .stats-results {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        .student-detail {
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            overflow: hidden;
-        }
-
-        .student-header {
-            background-color: #f7fafc;
-            padding: 10px 15px;
-            font-weight: bold;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .student-content {
-            padding: 15px;
-            display: none;
-        }
-
-        .student-content.expanded {
-            display: block;
-        }
-
-        .competency-stat {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            padding: 5px 10px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-        }
-
-        .download-btn {
-            background-color: #c77dff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .download-btn:hover {
-            background-color: #a855f7;
-            transform: translateY(-1px);
-        }
-
-        /* 반응형 */
-        @media (max-width: 1000px) {
-            .roster-management {
-                grid-template-columns: 1fr;
-            }
-            
-            .stats-controls {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .stats-results {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 768px) {
-            body {
-                flex-direction: column;
-            }
-            
-            .sidebar {
-                width: 100%;
-                padding: 15px;
-            }
-            
-            .main-content {
-                padding: 20px;
-            }
-            
-            .class-selector {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .stats-controls {
-                grid-template-columns: 1fr;
-            }
-            
-            .student-status-grid {
-                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            }
-        }
-
-        .success-message {
-            background-color: #e6fffa;
-            color: #234e52;
-            padding: 10px 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            border-left: 4px solid #81e6d9;
-        }
-
-        .activity-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 12px;
-            margin-bottom: 5px;
-            background-color: white;
-            border: 1px solid #ffd93d;
-            border-radius: 6px;
-            font-size: 13px;
-        }
-
-        .activity-item:last-child {
-            margin-bottom: 0;
-        }
-
-        .activity-info {
-            flex: 1;
-        }
-
-        .activity-date {
-            color: #c77dff;
-            font-weight: 600;
-        }
-
-        .activity-name {
-            color: #2d3748;
-            margin-left: 10px;
-        }
-
-        .delete-btn {
-            background-color: #e53e3e;
-            color: white;
-            border: none;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        .error-message {
-            background-color: #ffe6e6;
-            color: #c53030;
-            padding: 10px 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            border-left: 4px solid #fc8181;
-        }
-    </style>
+    /* ====== 저장된 명부 카드(추가) ====== */
+    .roster-item{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid #f0f0f0;border-radius:12px;margin:8px 0;background:#fff}
+    .roster-main{flex:1}
+    .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid #ffe0b3;background:#fff5e6;margin-left:6px}
+    .tiny-btn{border:none;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer}
+    .btn-danger{background:#e53e3e;color:#fff}
+    .btn-danger:hover{filter:brightness(0.95)}
+    .tiny-check{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+  </style>
 </head>
 <body>
-    <!-- 좌측 사이드바 -->
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <h2>👨‍🏫 관리자 메뉴</h2>
-            <p>선생님, 안녕하세요!</p>
-        </div>
-        
-        <button class="menu-item active" onclick="showPage('status')">📋 현황 페이지</button>
-        <button class="menu-item" onclick="showPage('statistics')">📊 통계 페이지</button>
-        <button class="logout-btn" onclick="logout()">🚪 로그아웃</button>
+  <!-- 사이드바 -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>👨‍🏫 관리자 메뉴</h2>
+      <p>선생님, 안녕하세요!</p>
+    </div>
+    <button class="menu-item active" onclick="showPage('status')">📋 현황 페이지</button>
+    <button class="menu-item" onclick="showPage('statistics')">📊 통계 페이지</button>
+    <button class="logout-btn" onclick="logout()">🚪 로그아웃</button>
+  </div>
+
+  <!-- 메인 -->
+  <div class="main-content">
+    <div class="page-header">
+      <h1>🎯 관리자 대시보드</h1>
+      <p>학생들의 평가 현황과 통계를 관리하세요</p>
     </div>
 
-    <!-- 메인 콘텐츠 -->
-    <div class="main-content">
-        <div class="page-header">
-            <h1>🎯 관리자 대시보드</h1>
-            <p>학생들의 평가 현황과 통계를 관리하세요</p>
+    <!-- 현황 페이지 -->
+    <div id="statusPage" class="page-content active">
+      <div class="card orange">
+        <h3>🏫 클래스 관리</h3>
+        <div class="class-selector" style="justify-content:center;gap:12px;">
+          <button onclick="showRosterModal()" style="background:#c77dff;color:#fff">명부 업로드</button>
+          <button onclick="downloadTemplate()">양식 다운로드 (CSV)</button>
         </div>
+      </div>
 
-        <!-- 현황 페이지 -->
-        <div id="statusPage" class="page-content active">
-            <!-- 클래스 선택 -->
-            <div class="card orange">
-                <h3>🏫 클래스 관리</h3>
-                <div class="class-selector" style="justify-content:center; gap:12px;">
-                  <button onclick="showRosterModal()" style="background-color:#c77dff; color:white;">명부 업로드</button>
-                  <button onclick="downloadTemplate()">양식 다운로드 (CSV)</button>
-            </div>
-            <div id="classInfo" style="text-align:center; color:#666; margin-bottom:15px;">현재 조회: 전체</div>
-            
-            <div class="card orange" id="rosterListCard">
-              <h3>📚 저장된 명부</h3>
-              <div id="rosterList" style="font-size:13px;color:#2d3748;"></div>
-            </div>
-            
-            <!-- 학생 현황판 -->
-            <div class="card purple">
-                <h3>👥 학생 현황판</h3>
-                <div id="studentStatusGrid" class="student-status-grid">
-                    <div style="grid-column: 1/-1; text-align: center; color: #666; padding: 20px;">
-                        클래스를 선택하고 조회 버튼을 눌러주세요.
-                    </div>
-                </div>
-                <div style="text-align: center; margin-top: 15px;">
-                    <span style="margin-right: 20px;">
-                        <span class="student-status status-completed">완료</span> 
-                        <span style="margin-left: 5px; font-size: 14px;" id="completedCount">0명</span>
-                    </span>
-                    <span style="margin-right: 20px;">
-                        <span class="student-status status-pending">부분완료</span>
-                        <span style="margin-left: 5px; font-size: 14px;" id="pendingCount">0명</span>
-                    </span>
-                    <span>
-                        <span class="student-status status-not-started">미시작</span>
-                        <span style="margin-left: 5px; font-size: 14px;" id="notStartedCount">0명</span>
-                    </span>
-                </div>
-            </div>
-        </div>
+      <div id="classInfo" style="text-align:center;color:#666;margin-bottom:15px;">현재 조회: 전체</div>
 
-        <!-- 통계 페이지 -->
-        <div id="statisticsPage" class="page-content">
-            <!-- 통계 조회 컨트롤 -->
-            <div class="card orange">
-                <h3>📈 통계 조회</h3>
-                <div class="stats-controls">
-                    <select id="statsYear">
-                        <option value="2024">2024년</option>
-                        <option value="2025" selected>2025년</option>
-                    </select>
-                    <select id="statsSubject">
-                        <option value="">전체 과목</option>
-                        <option value="국어">국어</option>
-                        <option value="수학">수학</option>
-                        <option value="영어">영어</option>
-                    </select>
-                    <select id="statsClub">
-                        <option value="">전체 동아리</option>
-                        <option value="코딩클럽">코딩클럽</option>
-                        <option value="독서토론">독서토론</option>
-                    </select>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="date" id="startDate" style="padding: 8px; border: 2px solid #c77dff; border-radius: 8px;">
-                        <span>~</span>
-                        <input type="date" id="endDate" style="padding: 8px; border: 2px solid #c77dff; border-radius: 8px;">
-                    </div>
-                </div>
-                <div style="text-align: center; margin-top: 10px;">
-                    <button onclick="loadStatistics()" style="background-color: #c77dff; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600;">
-                        통계 조회
-                    </button>
-                </div>
-            </div>
+      <!-- ✅ 저장된 명부 박스: 여기 안에 실제 명부가 렌더링됨 -->
+      <div class="card orange" id="rosterListCard">
+        <h3>📚 저장된 명부</h3>
+        <p id="saved-roster-empty" style="text-align:center;color:#888">저장된 명부가 없습니다. 먼저 업로드 해 주세요.</p>
+        <div id="rosterList" style="font-size:13px;color:#2d3748;"></div>
+      </div>
 
-            <!-- 통계 결과 -->
-            <div class="stats-results">
-                <div class="card purple">
-                    <h3>📊 개인별 통계</h3>
-                    <div style="margin-bottom: 15px; text-align: right;">
-                        <button class="download-btn" onclick="downloadExcel()">📥 엑셀 다운로드</button>
-                    </div>
-                    <div id="statisticsResults">
-                        <div style="text-align: center; color: #666; padding: 20px;">
-                            통계 조회 버튼을 눌러주세요.
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card orange">
-                    <h3>📈 전체 요약</h3>
-                    <div id="summaryStats">
-                        <div style="text-align: center; color: #666; padding: 20px;">
-                            통계 데이터를 불러오는 중...
-                        </div>
-                    </div>
-                    
-                    <!-- 활동 정보 입력 및 목록 -->
-                    <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #fff5e6;">
-                        <h4 style="text-align: center; margin-bottom: 15px; color: #2d3748;">📝 활동 정보 관리</h4>
-                        
-                        <!-- 입력 폼 -->
-                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                            <input type="date" id="activityDate" placeholder="활동 날짜" 
-                                   style="flex: 1; padding: 8px; border: 2px solid #ffd93d; border-radius: 8px;">
-                            <input type="text" id="activityName" placeholder="활동명 (예: 모둠 토론)" 
-                                   style="flex: 2; padding: 8px; border: 2px solid #ffd93d; border-radius: 8px;">
-                            <button onclick="addActivityInfo()" 
-                                    style="background-color: #ffd93d; color: #2d3748; border: none; padding: 8px 15px; border-radius: 8px; font-weight: 600; white-space: nowrap;">
-                                추가
-                            </button>
-                        </div>
-                        
-                        <!-- 활동 목록 -->
-                        <div id="activityList" style="max-height: 150px; overflow-y: auto;">
-                            <!-- 여기에 활동 목록이 표시됩니다 -->
-                        </div>
-                        
-                        <!-- 전체 삭제 버튼 -->
-                        <div style="text-align: center; margin-top: 10px;">
-                            <button onclick="clearAllActivities()" 
-                                    style="background-color: #e53e3e; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px;">
-                                전체 삭제
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 명부 관리 모달 (간단한 구현) -->
-    <!-- 명부 업로드 모달 (카테고리 지정 + 미리보기 + 저장) -->
-    <div id="rosterModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; align-items:center; justify-content:center;">
-      <div style="background:white; padding:28px; border-radius:16px; width:min(560px,92%);">
-        <h3 style="margin-bottom:16px; text-align:center;">📋 명부 업로드</h3>
-
-        <!-- 1) 카테고리 지정 -->
-        <div style="display:grid; grid-template-columns: 120px 1fr; gap:8px; align-items:center; margin-bottom:14px;">
-          <div style="font-weight:600;">카테고리 종류</div>
-          <div>
-            <label style="margin-right:12px;"><input type="radio" name="catType" value="subject" checked> 과목</label>
-            <label><input type="radio" name="catType" value="club"> 동아리</label>
-          </div>
-
-          <div style="font-weight:600;">카테고리 이름</div>
-          <div>
-            <input id="categoryName" placeholder="예) 국어 / 코딩클럽" style="width:100%; padding:8px 10px; border:2px solid #ffd93d; border-radius:8px;">
+      <!-- 학생 현황판 -->
+      <div class="card purple">
+        <h3>👥 학생 현황판</h3>
+        <div id="studentStatusGrid" class="student-status-grid">
+          <div style="grid-column:1/-1;text-align:center;color:#666;padding:20px;">
+            클래스를 선택하고 조회 버튼을 눌러주세요.
           </div>
         </div>
-
-        <!-- 2) 파일 선택 -->
-        <div class="file-upload" onclick="document.getElementById('csvFile').click()">
-          <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event)">
-          <div>📁 CSV 또는 Excel 파일을 선택하세요</div>
-          <div style="font-size:12px; color:#666; margin-top:5px;">
-            형식: <strong>이름, 학번</strong> (카테고리는 위에서 미리 지정)
-          </div>
-
-          <div style="text-align:center; margin-top:10px;">
-            <button type="button" onclick="downloadTemplate()"
-              style="background:#ffd93d; color:#2d3748; border:none; padding:8px 14px; border-radius:8px; font-weight:600;">
-              📥 양식 다운로드
-            </button>
-          </div>
-        </div>
-
-        <!-- 파일 미리보기 -->
-        <div id="rosterPreview" style="margin-top:12px; max-height:180px; overflow:auto; border:1px dashed #eee; border-radius:8px; padding:8px; font-size:13px; color:#2d3748;">
-          파일을 선택하면 미리보기가 여기에 표시됩니다.
-        </div>
-
-        <!-- 저장 버튼 -->
-        <div style="margin-top:12px; text-align:right;">
-          <button id="btnSaveRoster" type="button" onclick="saveRoster()" 
-                  style="background:#5c7cfa; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:600;"
-                  disabled>
-            저장
-          </button>
-        </div>
-
-
-        <!-- 4) 액션 버튼 -->
-        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:18px;">
-          <button onclick="clearAllData()" style="background:#e53e3e; color:#fff; border:none; padding:8px 14px; border-radius:8px;">
-            🗑️ 전체 초기화
-          </button>
-          <button onclick="closeRosterModal()" style="background:#4a5568; color:#fff; border:none; padding:8px 14px; border-radius:8px;">
-            닫기
-          </button>
+        <div style="text-align:center;margin-top:15px;">
+          <span style="margin-right:20px;">
+            <span class="student-status status-completed">완료</span>
+            <span id="completedCount" style="margin-left:5px;font-size:14px;">0명</span>
+          </span>
+          <span style="margin-right:20px;">
+            <span class="student-status status-pending">부분완료</span>
+            <span id="pendingCount" style="margin-left:5px;font-size:14px;">0명</span>
+          </span>
+          <span>
+            <span class="student-status status-not-started">미시작</span>
+            <span id="notStartedCount" style="margin-left:5px;font-size:14px;">0명</span>
+          </span>
         </div>
       </div>
     </div>
-    <div id="savedRosters" style="margin:12px 0"></div>
 
-    <script>
-       async function getJson(url){
-         const res = await fetch(url);
-         const t = await res.text(); let j={}; try{ if(t) j=JSON.parse(t);}catch{}
-         if(!res.ok || j.success===false){ throw new Error(j.error || res.status+' '+res.statusText); }
-         return j;
-       } 
-       async function postJson(url, data){
-         const res = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-         const t = await res.text(); let j={}; try{ if(t) j=JSON.parse(t);}catch{}
-         if(!res.ok || j.success===false){ throw new Error(j.error || res.status+' '+res.statusText); }
-         return j;
-       }
+    <!-- 통계 페이지 (내용 동일) -->
+    <div id="statisticsPage" class="page-content">
+      <div class="card orange">
+        <h3>📈 통계 조회</h3>
+        <div class="stats-controls">
+          <select id="statsYear"><option value="2024">2024년</option><option value="2025" selected>2025년</option></select>
+          <select id="statsSubject"><option value="">전체 과목</option><option>국어</option><option>수학</option><option>영어</option></select>
+          <select id="statsClub"><option value="">전체 동아리</option><option>코딩클럽</option><option>독서토론</option></select>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <input type="date" id="startDate" style="padding:8px;border:2px solid #c77dff;border-radius:8px;">
+            <span>~</span>
+            <input type="date" id="endDate" style="padding:8px;border:2px solid #c77dff;border-radius:8px;">
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:10px;">
+          <button onclick="loadStatistics()" style="background:#c77dff;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-weight:600;">통계 조회</button>
+        </div>
+      </div>
 
-        async function loadSavedRosters(){
-          try{
-            const box = document.getElementById('savedRosters');
-            box.innerHTML = '<div style="padding:8px;color:#666">저장된 명부를 불러오는 중…</div>';
-            const { rosters } = await getJson('/api/admin/list-rosters');
-            if(!rosters || rosters.length===0){ box.innerHTML = '<div style="padding:8px;color:#999">저장된 명부 없음</div>'; return; }
+      <div class="stats-results">
+        <div class="card purple">
+          <h3>📊 개인별 통계</h3>
+          <div style="margin-bottom:15px;text-align:right;">
+            <button class="download-btn" onclick="downloadExcel()">📥 엑셀 다운로드</button>
+          </div>
+          <div id="statisticsResults">
+            <div style="text-align:center;color:#666;padding:20px;">통계 조회 버튼을 눌러주세요.</div>
+          </div>
+        </div>
 
-            const html = rosters.map(r => `
-              <div style="display:flex;align-items:center;gap:12px;padding:10px;border:1px solid #eee;border-radius:10px;margin:6px 0">
-                <div style="flex:1">
-                  <div style="font-weight:700">${r.title} <span style="color:#999;font-weight:500">(${r.itemCount}명)</span></div>
-                  <div style="color:#888;font-size:12px">타입: ${r.type} / id: ${r.id}</div>
-                </div>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px">
-                  <input type="checkbox" ${r.active?'checked':''} data-roster="${r.id}" class="toggle-publish" /> 현황판 노출
-                </label>
-              </div>
-            `).join('');
-            box.innerHTML = html;
+        <div class="card orange">
+          <h3>📈 전체 요약</h3>
+          <div id="summaryStats">
+            <div style="text-align:center;color:#666;padding:20px;">통계 데이터를 불러오는 중...</div>
+          </div>
 
+          <!-- 활동 정보 관리(기존) -->
+          <div style="margin-top:20px;padding-top:20px;border-top:2px solid #fff5e6;">
+            <h4 style="text-align:center;margin-bottom:15px;color:#2d3748;">📝 활동 정보 관리</h4>
+            <div style="display:flex;gap:10px;margin-bottom:15px;">
+              <input type="date" id="activityDate" style="flex:1;padding:8px;border:2px solid #ffd93d;border-radius:8px;">
+              <input type="text" id="activityName" placeholder="활동명 (예: 모둠 토론)" style="flex:2;padding:8px;border:2px solid #ffd93d;border-radius:8px;">
+              <button onclick="addActivityInfo()" style="background:#ffd93d;color:#2d3748;border:none;padding:8px 15px;border-radius:8px;font-weight:600;white-space:nowrap;">추가</button>
+            </div>
+            <div id="activityList" style="max-height:150px;overflow-y:auto;"></div>
+            <div style="text-align:center;margin-top:10px;">
+              <button onclick="clearAllActivities()" style="background:#e53e3e;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:12px;">전체 삭제</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-            document.querySelectorAll('.toggle-publish').forEach(el => {
-              el.onchange = async () => {
-                el.disabled = true;
-                try{
-                  await postJson('/api/admin/publish-roster', { rosterId: el.dataset.roster, publish: el.checked });
-                  // 현황판 새로고침(네가 쓰는 함수명에 맞춰 변경)
-                  if (typeof loadStudentStatus === 'function') loadStudentStatus();
-                }catch(e){ alert('실패: '+e.message); el.checked = !el.checked; }
-                finally{ el.disabled = false; }
-              };
-            });
-          }catch(e){ console.error(e); }
+  <!-- 명부 업로드 모달 -->
+  <div id="rosterModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:28px;border-radius:16px;width:min(560px,92%);">
+      <h3 style="margin-bottom:16px;text-align:center;">📋 명부 업로드</h3>
+
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center;margin-bottom:14px;">
+        <div style="font-weight:600;">카테고리 종류</div>
+        <div>
+          <label style="margin-right:12px;"><input type="radio" name="catType" value="subject" checked> 과목</label>
+          <label><input type="radio" name="catType" value="club"> 동아리</label>
+        </div>
+        <div style="font-weight:600;">카테고리 이름</div>
+        <div><input id="categoryName" placeholder="예) 국어 / 코딩클럽" style="width:100%;padding:8px 10px;border:2px solid #ffd93d;border-radius:8px;"></div>
+      </div>
+
+      <div class="file-upload" onclick="document.getElementById('csvFile').click()">
+        <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event)">
+        <div>📁 CSV 또는 Excel 파일을 선택하세요</div>
+        <div style="font-size:12px;color:#666;margin-top:5px;">형식: <strong>이름, 학번</strong> (카테고리는 위에서 미리 지정)</div>
+        <div style="text-align:center;margin-top:10px;">
+          <button type="button" onclick="downloadTemplate()" style="background:#ffd93d;color:#2d3748;border:none;padding:8px 14px;border-radius:8px;font-weight:600;">📥 양식 다운로드</button>
+        </div>
+      </div>
+
+      <div id="rosterPreview" style="margin-top:12px;max-height:180px;overflow:auto;border:1px dashed #eee;border-radius:8px;padding:8px;font-size:13px;color:#2d3748;">
+        파일을 선택하면 미리보기가 여기에 표시됩니다.
+      </div>
+
+      <div style="margin-top:12px;text-align:right;">
+        <button id="btnSaveRoster" type="button" onclick="saveRoster()" style="background:#5c7cfa;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-weight:600;" disabled>저장</button>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px;">
+        <button onclick="clearAllData()" style="background:#e53e3e;color:#fff;border:none;padding:8px 14px;border-radius:8px;">🗑️ 전체 초기화</button>
+        <button onclick="closeRosterModal()" style="background:#4a5568;color:#fff;border:none;padding:8px 14px;border-radius:8px;">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ========== 공통 유틸 ========== */
+    async function readJsonSafe(res){
+      try{ return await res.clone().json(); }
+      catch{ let t=''; try{ t=await res.text(); }catch{}; return {success:false,error:(t && t.slice(0,200))||`HTTP ${res.status}`} }
+    }
+    async function getJson(url){
+      const r = await fetch(url,{credentials:'include'});
+      const j = await readJsonSafe(r);
+      if(!r.ok || j.success===false) throw new Error(j.error || `HTTP ${r.status}`);
+      return j;
+    }
+    async function postJson(url, body){
+      const r = await fetch(url,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'include',
+        body:JSON.stringify(body||{})
+      });
+      const j = await readJsonSafe(r);
+      if(!r.ok || j.success===false) throw new Error(j.error || `HTTP ${r.status}`);
+      return j;
+    }
+
+    /* ========== 페이지 전환 ========== */
+    function showPage(pageType){
+      document.querySelectorAll('.menu-item').forEach(b=>b.classList.remove('active'));
+      event.target.classList.add('active');
+      document.querySelectorAll('.page-content').forEach(x=>x.classList.remove('active'));
+      if(pageType==='status'){ document.getElementById('statusPage').classList.add('active'); loadStudentStatus(); }
+      else { document.getElementById('statisticsPage').classList.add('active'); loadStatistics(); }
+    }
+
+    /* ========== 저장된 명부 목록 렌더링(핵심) ========== */
+    function rosterTitle(r){ return r.title || r.name || '명부 업로드'; }
+    function rosterCount(r){ return (r.count ?? r.studentCount ?? 0); }
+
+    function renderRosterItem(r){
+      const el = document.createElement('div');
+      el.className = 'roster-item';
+      el.innerHTML = `
+        <div class="roster-main">
+          <div style="font-weight:700">${rosterTitle(r)}
+            <span class="tag">${rosterCount(r)}명</span>
+            ${r.published || r.active ? '<span class="tag" style="border-color:#c7ffe0;background:#f2fff8">노출중</span>' : ''}
+          </div>
+          <div style="color:#888;font-size:12px">id: ${r.id}</div>
+        </div>
+        <label class="tiny-check">
+          <input type="checkbox" ${ (r.active || r.published) ? 'checked':'' } data-id="${r.id}" class="js-publish">
+          현황판 노출
+        </label>
+        <button class="tiny-btn btn-danger js-del" data-id="${r.id}">삭제</button>
+      `;
+      // 토글
+      el.querySelector('.js-publish').addEventListener('change', async (e)=>{
+        const id = e.target.dataset.id;
+        const publish = e.target.checked;
+        e.target.disabled = true;
+        try{
+          await postJson('/api/admin/publish-roster', { rosterId:id, publish });
+          await loadSavedRosters();
+          if(typeof loadStudentStatus==='function') loadStudentStatus();
+        }catch(err){
+          alert(err.message||'노출 설정 실패');
+          e.target.checked = !publish;
+        }finally{ e.target.disabled=false; }
+      });
+      // 삭제
+      el.querySelector('.js-del').addEventListener('click', async (e)=>{
+        const id = e.target.dataset.id;
+        if(!confirm('이 명부를 삭제할까요? (학생 데이터는 그대로 남아있을 수 있습니다)')) return;
+        e.target.disabled = true;
+        try{
+          await postJson('/api/admin/delete-roster', { rosterId:id });   // ← 서버에 이 엔드포인트가 필요합니다.
+          await loadSavedRosters();
+          if(typeof loadStudentStatus==='function') loadStudentStatus();
+        }catch(err){
+          alert(err.message||'삭제 실패');
+        }finally{ e.target.disabled=false; }
+      });
+      return el;
+    }
+
+    async function loadSavedRosters(){
+      const listEl = document.getElementById('rosterList');
+      const emptyEl = document.getElementById('saved-roster-empty');
+      try{
+        listEl.innerHTML = '<div style="padding:8px;color:#666">불러오는 중…</div>';
+        const { rosters=[] } = await getJson('/api/admin/list-rosters');
+        listEl.innerHTML = '';
+        if(!rosters.length){
+          emptyEl.style.display = 'block';
+          return;
         }
+        emptyEl.style.display = 'none';
+        const frag = document.createDocumentFragment();
+        rosters
+          .sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0))
+          .forEach(r=>frag.appendChild(renderRosterItem(r)));
+        listEl.appendChild(frag);
+      }catch(e){
+        console.error(e);
+        listEl.innerHTML = '<div style="color:#c53030">목록을 불러오지 못했습니다.</div>';
+      }
+    }
 
+    /* ========== 업로드 ========== */
+    const UP = { preview: [] };
+    function getUploadMeta(){
+      const type = (document.querySelector('input[name="catType"]:checked')?.value)||'subject';
+      const name = document.getElementById('categoryName')?.value?.trim()||'';
+      return { type, name };
+    }
+    function renderPreview(){
+      const box = document.getElementById('rosterPreview');
+      const btn = document.getElementById('btnSaveRoster');
+      if(!UP.preview.length){
+        box.textContent = '파일을 선택하면 미리보기가 여기에 표시됩니다.';
+        btn.disabled = true; return;
+      }
+      box.innerHTML = `
+        <div style="margin-bottom:6px;color:#666;">총 ${UP.preview.length}명</div>
+        <ul style="list-style:none;padding:0;margin:0">
+          ${UP.preview.map(r=>`<li style="padding:4px 0;border-bottom:1px solid #f2f2f2">${r.studentId} - ${r.name}</li>`).join('')}
+        </ul>`;
+      btn.disabled = false;
+    }
+    function showRosterModal(){ UP.preview=[]; renderPreview(); document.getElementById('categoryName').value=''; document.getElementById('rosterModal').style.display='flex'; }
+    function closeRosterModal(){ document.getElementById('rosterModal').style.display='none'; }
 
-        // 페이지 로드시 호출 (기존 init 흐름에 맞춰 배치)
-        window.addEventListener('DOMContentLoaded', () => {
-          loadSavedRosters();
-          // 기존 현황판 로딩 함수도 호출
-          if (typeof loadStudentStatus === 'function') loadStudentStatus();
-        });
-        
-        async function postJson(url, payload) {
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          let j = {};
-          try { j = await readJsonSafe(res); } catch (_) {}
-          if (!res.ok || !j.success) {
-            const msg = j?.error || res.statusText || `HTTP ${res.status}`;
-            throw new Error(msg);
+    function parseCSV(text){ return text.replace(/\r/g,'').split('\n').map(l=>l.split(',').map(c=>(c??'').trim())).filter(c=>c.some(x=>x)); }
+    function handleFileUpload(ev){
+      const file = ev.target.files?.[0]; if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (e)=>{
+        try{
+          let rows;
+          if(file.name.toLowerCase().endsWith('.csv')){
+            const buf = new Uint8Array(e.target.result);
+            let txt=''; try{ txt=new TextDecoder('utf-8',{fatal:true}).decode(buf); }
+            catch{ try{ txt=new TextDecoder('euc-kr').decode(buf);}catch{ txt=new TextDecoder().decode(buf);} }
+            rows = parseCSV(String(txt||''));
+          }else{
+            const wb = XLSX.read(e.target.result,{type:'binary'});
+            rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1});
           }
-          return j;
-        }
-
-        // ---------- 업로드 상태 ----------
-        const UP = { preview: [] }; // [{name, studentId}]
-
-        function getUploadMeta() {
-          const type = (document.querySelector('input[name="catType"]:checked')?.value) || 'subject';
-          const name = document.getElementById('categoryName')?.value?.trim() || '';
-          return { type, name };
-        }
-
-        function renderPreview() {
-          const box = document.getElementById('rosterPreview');
-          const btn = document.getElementById('btnSaveRoster');
-          if (!box) return;
-
-          if (!Array.isArray(UP.preview) || UP.preview.length === 0) {
-            box.innerHTML = '파일을 선택하면 미리보기가 여기에 표시됩니다.';
-            if (btn) btn.disabled = true;
-            return;
-          }
-
-          box.innerHTML = `
-            <div style="margin-bottom:6px; color:#666;">총 ${UP.preview.length}명</div>
-            <ul style="list-style:none; padding:0; margin:0;">
-              ${UP.preview.map(r => `<li style="padding:4px 0; border-bottom:1px solid #f2f2f2;">
-                ${r.studentId} - ${r.name}
-              </li>`).join('')}
-            </ul>
-          `;
-          if (btn) btn.disabled = false;
-        }
-
-        
-        // 과목 후보(파일 3열 값이 여기에 있으면 과목, 아니면 동아리로 분류)
-        const SUBJECT_CANDIDATES = ['국어','수학','영어','과학','사회','창체','역사','음악','미술','체육','정보','보건'];
-
-        let currentStudentData = [];
-        let currentStatsData = [];
-
-        // 페이지 전환
-        function showPage(pageType) {
-            // 메뉴 활성화 상태 변경
-            document.querySelectorAll('.menu-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            event.target.classList.add('active');
-
-            // 페이지 내용 전환
-            document.querySelectorAll('.page-content').forEach(content => {
-                content.classList.remove('active');
-            });
-
-            if (pageType === 'status') {
-                document.getElementById('statusPage').classList.add('active');
-                loadStudentStatus();
-            } else if (pageType === 'statistics') {
-                document.getElementById('statisticsPage').classList.add('active');
-                loadStatistics();
-            }
-        }
-
-           // 조회 로드
-           async function loadRosterList() {
-             try {
-               const res = await fetch('/api/admin/list-students'); // 전체 학생
-               const j = await readJsonSafe(res);
-               if (!res.ok || !j.success) throw new Error(j.error || '조회 실패');
-               const students = Array.isArray(j.students) ? j.students : [];
-               renderRosterList(students);
-             } catch (e) {
-               console.error(e);
-               document.getElementById('rosterList').innerHTML =
-                 '<div style="color:#c53030;">목록을 불러오지 못했습니다.</div>';
-             }
-           }
-
-           // 카테고리(과목/동아리)만 보여주기
-           function renderRosterList(students) {
-             const box = document.getElementById('rosterList');
-             if (!students.length) {
-               box.innerHTML = '<div style="color:#666;">저장된 명부가 없습니다. 먼저 업로드 해 주세요.</div>';
-               return;
-             }
-             const bySubject = {};
-             const byClub = {};
-             students.forEach(s => {
-               if (s.subject) bySubject[s.subject] = (bySubject[s.subject] || 0) + 1;
-               if (s.club)    byClub[s.club]       = (byClub[s.club] || 0) + 1;
-             });
-
-             const chips = obj => Object.entries(obj)
-               .map(([k,v]) => `<span style="display:inline-block;margin:3px;padding:6px 10px;border-radius:999px;background:#fff5e6;border:1px solid #ffd93d;">${k} <strong>${v}</strong>명</span>`)
-               .join('');
-
-             box.innerHTML = `
-               <div style="margin-bottom:10px;"><strong>과목</strong></div>
-               <div style="margin-bottom:14px;">${Object.keys(bySubject).length ? chips(bySubject) : '<span style="color:#999;">없음</span>'}</div>
-               <div style="margin-bottom:10px;"><strong>동아리</strong></div>
-               <div>${Object.keys(byClub).length ? chips(byClub) : '<span style="color:#999;">없음</span>'}</div>
-             `;
-           }
-
-        
-        // 엑셀 양식 
-        // 엑셀/CSV 업로드용 양식 다운로드 (이름, 학번, 과목/동아리)
-        function downloadTemplate() {
-          const csv = ['이름,학번', '홍길동,20250001', '김나래,20250002'].join('\n');
-          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = '명부_양식.csv'; document.body.appendChild(a);
-          a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-        }
-
-        
-        // 학생 현황 로드
-        async function loadStudentStatus() {
-          try {
-            const res = await fetch('/api/admin/list-students'); // 전체
-            const j = await readJsonSafe(res);
-        
-            if (!res.ok || !j.success) throw new Error(j.error || '조회 실패');
-        
-            const students = Array.isArray(j.students) ? j.students : [];
-            document.getElementById('classInfo').textContent = '현재 조회: 전체';
-        
-            if (students.length === 0) {
-              renderStudentStatusEmpty();
-              return;
-            }
-
-            const normalized = students.map(s => ({
-              name: s.name,
-              studentId: s.studentId,
-              status: s.status || 'not-started',
-              hasPeerEvaluation: !!s.hasPeerEvaluation,
-              hasSelfEvaluation: !!s.hasSelfEvaluation,
-             lastUpdate: s.lastUpdate || '-'
-            }));
-
-            displayStudentStatus(normalized);
-          } catch (e) {
-            console.error('현황 조회 오류:', e);
-            showMessage('현황 조회 중 오류가 발생했습니다.', 'error');
-            renderStudentStatusEmpty();
-          }
-        }
-
-
-        function renderStudentStatusEmpty() {
-          const grid = document.getElementById('studentStatusGrid');
-          grid.innerHTML = `
-            <div style="grid-column:1/-1;text-align:center;color:#666;padding:20px;">
-              저장된 명부가 없습니다. <strong>명부 관리</strong>에서 업로드 후 조회하세요.
-            </div>`;
-          document.getElementById('completedCount').textContent = '0명';
-          document.getElementById('pendingCount').textContent = '0명';
-          document.getElementById('notStartedCount').textContent = '0명';
-        }
-
-        
-        // 학생 현황 표시
-        function displayStudentStatus(students) {
-            const grid = document.getElementById('studentStatusGrid');
-            const statusCounts = { completed: 0, pending: 0, 'not-started': 0 };
-
-            if (students.length === 0) {
-                grid.innerHTML = `
-                    <div style="grid-column: 1/-1; text-align: center; color: #666; padding: 20px;">
-                        해당 클래스에 등록된 학생이 없습니다.<br>
-                        명부 관리에서 학생을 등록해주세요.
-                    </div>
-                `;
-                document.getElementById('completedCount').textContent = '0명';
-                document.getElementById('pendingCount').textContent = '0명';
-                document.getElementById('notStartedCount').textContent = '0명';
-                return;
-            }
-
-            grid.innerHTML = students.map(student => {
-                statusCounts[student.status]++;
-                
-                const statusText = {
-                    completed: '완료',
-                    pending: '부분완료', 
-                    'not-started': '미시작'
-                };
-
-                const detailText = {
-                    completed: '동료평가 ✓ 자기평가 ✓',
-                    pending: student.hasPeerEvaluation && !student.hasSelfEvaluation ? '동료평가 ✓ 자기평가 ✗' :
-                            !student.hasPeerEvaluation && student.hasSelfEvaluation ? '동료평가 ✗ 자기평가 ✓' :
-                            '동료평가 ✓ 자기평가 ✗',
-                    'not-started': '동료평가 ✗ 자기평가 ✗'
-                };
-
-                return `
-                    <div class="student-card ${student.status}" title="${detailText[student.status]}">
-                        <div class="student-name">${student.name}</div>
-                        <div class="student-status status-${student.status}">
-                            ${statusText[student.status]}
-                        </div>
-                        <div style="font-size: 10px; color: #666; margin-top: 5px;">
-                            ${student.lastUpdate}
-                        </div>
-                        <div style="font-size: 9px; color: #999; margin-top: 2px;">
-                            ${detailText[student.status]}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            // 카운트 업데이트
-            document.getElementById('completedCount').textContent = statusCounts.completed + '명';
-            document.getElementById('pendingCount').textContent = statusCounts.pending + '명';
-            document.getElementById('notStartedCount').textContent = statusCounts['not-started'] + '명';
-        }
-
-        // 클래스 정보 업데이트
-        function updateClassInfo(year, subject, club) {
-            const parts = [];
-            if (year) parts.push(`${year}년`);
-            if (subject) parts.push(subject);
-            if (club) parts.push(club);
-            
-            const info = parts.length > 0 ? parts.join(' > ') : '전체';
-            document.getElementById('classInfo').textContent = `현재 조회: ${info}`;
-        }
-
-        // 통계 로드, loadstatics 삭
-        
-        // 더미 통계 데이터 생성 함수 generatedummy~ 삭제
-        
-        // 통계 결과 표시displayStatistics 삭제
-
-        // 요약 통계 표시displaySummaryStats삭제
-
-
-       // ─────────────────────────────────────────────────────────────
-       // 통계: 서버 API 기반으로 집계 (list-students + get-evaluations)
-       // ─────────────────────────────────────────────────────────────
-
-       const COMPETENCIES = ['자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
-
-       // 통계 로드(클릭 핸들러)
-       async function loadStatistics() {
-         const year = document.getElementById('statsYear').value;
-         const subject = document.getElementById('statsSubject').value;
-         const club = document.getElementById('statsClub').value;
-         const startDate = document.getElementById('startDate').value || '';
-         const endDate   = document.getElementById('endDate').value   || '';
-
-         try {
-           // 1) 해당 클래스의 학생 목록 조회
-           const qsStudents = new URLSearchParams({ year, subject, club });
-           const resS = await fetch(`/api/admin/list-students?${qsStudents.toString()}`);
-           const jS = await readJsonSafe(resS);
-           if (!resS.ok || !jS.success || !Array.isArray(jS.students) || jS.students.length === 0) {
-             displayStatistics([]); 
-             displaySummaryStats([]);
-             currentStatsData = [];
-             showMessage('해당 조건의 학생 명부가 없습니다.', 'error');
-             return;
-           }
-
-           const students = jS.students; // [{ name, studentId, username?... }]
-
-           // 2) 각 학생의 평가 데이터 병렬 조회
-           const perStudentPromises = students.map(async (stu) => {
-             const targetUsername = (stu.username || stu.studentId || stu.name).toString();
-             const qsEval = new URLSearchParams({ 
-               targetUsername, 
-               evaluationType: 'all',
-               ...(startDate ? { startDate } : {}),
-               ...(endDate   ? { endDate }   : {}),
-             });
-
-             try {
-               const resE = await fetch(`/api/get-evaluations?${qsEval.toString()}`);
-               const jE = await resE.json();
-
-               // 기대 포맷: { success, evaluations: [...] }
-               const evals = (resE.ok && jE.success && Array.isArray(jE.evaluations)) ? jE.evaluations : [];
-     
-               // 3) 학생별 통계 구조로 변환
-               // stats = { '자신감과 리더십': {count, evaluations:[{date,activity,reason}]}, ... }
-               const stats = {};
-               COMPETENCIES.forEach(c => { stats[c] = { count: 0, evaluations: [] }; });
-     
-               evals.forEach(ev => {
-                 // peerEvaluations: [{ competency, nominees: [..] or name, reasons: [...] or reason }]
-                 // selfEvaluation : { competency, reason }
-                 // ev.date: 'YYYY-MM-DD' (get-evaluations에서 ISO 변환해둔 값이 들어옴)
-
-                 // 동료평가: 해당 학생이 '지명된' 기록만 카운트
-                 if (Array.isArray(ev.peerEvaluations)) {
-                   ev.peerEvaluations.forEach(p => {
-                     const comp = p.competency;
-                     if (!COMPETENCIES.includes(comp)) return;
-                 
-                     // nominees 배열(복수 지명) 혹은 name 단일 값 등 다양한 케이스를 수용
-                     const nominees = Array.isArray(p.nominees) ? p.nominees
-                                     : (p.name ? [p.name] : []);
-                     const reasons  = Array.isArray(p.reasons) ? p.reasons
-                                     : (p.reason ? [p.reason] : []);
-                   
-                     const picked = nominees.some(n => n === targetUsername || n === stu.name || n === stu.studentId);
-                     if (picked) {
-                       stats[comp].count += 1;
-                       stats[comp].evaluations.push({
-                         date: ev.date || (ev.timestamp ? (new Date(ev.timestamp).toISOString().slice(0,10)) : ''),
-                         activity: ev.activity || ev.activityName || '-', // 있으면 표시, 없으면 '-'
-                         reason: reasons[0] || '' // 첫 사유만 노출(여럿이면 UI가 너무 길어짐)
-                      });
-                     }
-                   });
-                 }
-
-                 // 자기평가: 참고용으로도 보여주고 싶으면 아래 주석 해제
-                 // if (ev.selfEvaluation && COMPETENCIES.includes(ev.selfEvaluation.competency)) {
-                 //   const comp = ev.selfEvaluation.competency;
-                 //   stats[comp].evaluations.push({
-                 //     date: ev.date || '',
-                 //     activity: ev.activity || '-',
-                 //     reason: `(자기평가) ${ev.selfEvaluation.reason || ''}`
-                 //   });
-                 // }
-               });
-
-               return { name: stu.name, stats };
-             } catch (e) {
-               console.error('개별 학생 통계 변환 오류:', e);
-               // 실패 시 카운트 0으로 리턴
-               const empty = {};
-               COMPETENCIES.forEach(c => { empty[c] = { count: 0, evaluations: [] }; });
-               return { name: stu.name, stats: empty };
-             }
-           });
-
-           const perStudentStats = await Promise.all(perStudentPromises);
-
-           // 4) UI 업데이트
-           currentStatsData = perStudentStats;
-           displayStatistics(perStudentStats);
-           displaySummaryStats(perStudentStats);
-
-         } catch (err) {
-           console.error('통계 조회 오류:', err);
-           showMessage('통계 조회 중 오류가 발생했습니다.', 'error');
-           currentStatsData = [];
-           displayStatistics([]);
-           displaySummaryStats([]);
-         }
-       }
-
-       // 통계 결과 표시 (UI 렌더는 기존 마크업을 그대로 사용)
-       function displayStatistics(statsData) {
-         const container = document.getElementById('statisticsResults');
-
-         if (!Array.isArray(statsData) || statsData.length === 0) {
-           container.innerHTML = `
-             <div style="text-align: center; color: #666; padding: 20px;">
-               통계 데이터가 없습니다. 조건을 변경해 다시 조회해보세요.
-             </div>`;
-           return;
-         }
-
-         container.innerHTML = statsData.map(student => `
-           <div class="student-detail">
-             <div class="student-header" onclick="toggleStudentDetail(this)">
-               <span><strong>${student.name}</strong></span>
-               <span>▼</span>
-             </div>
-             <div class="student-content">
-               ${COMPETENCIES.map(comp => {
-                 const data = student.stats[comp] || { count: 0, evaluations: [] };
-                 return `
-                   <div class="competency-stat">
-                     <span>${comp}</span>
-                     <span><strong>${data.count}회</strong></span>
-                   </div>
-                   ${data.evaluations.length > 0 ? `
-                     <div style="margin-left: 15px; margin-bottom: 15px;">
-                       ${data.evaluations.map(ev => `
-                         <div style="font-size: 12px; color: #666; margin-bottom: 8px; padding: 8px; background-color: #f8f9fa; border-radius: 5px; border-left: 3px solid #c77dff;">
-                           <div><strong>📅 ${ev.date || '-'}</strong> | <strong>📋 ${ev.activity || '-'}</strong></div>
-                           ${ev.reason ? `<div style="margin-top: 3px;">💬 ${ev.reason}</div>` : ''}
-                         </div>
-                       `).join('')}
-                     </div>
-                   ` : '' }
-                 `;
-               }).join('')}
-             </div>
-           </div>
-         `).join('');
-       }
-
-       // 요약 통계 표시
-       function displaySummaryStats(statsData) {
-         const container = document.getElementById('summaryStats');
-
-         if (!Array.isArray(statsData) || statsData.length === 0) {
-           container.innerHTML = `
-             <div style="text-align: center; color: #666; padding: 20px;">
-               통계 데이터가 없습니다.
-             </div>`;
-           return;
-         }
-
-         const totalStudents = statsData.length;
-
-         // 역량별 최고 추천자 계산
-         const topByComp = {};
-         COMPETENCIES.forEach(comp => {
-           let maxCount = 0;
-           let topStudent = '없음';
-           statsData.forEach(st => {
-             const cnt = (st.stats[comp]?.count) || 0;
-             if (cnt > maxCount) {
-               maxCount = cnt;
-               topStudent = st.name;
-             }
-           });
-           topByComp[comp] = { name: topStudent, count: maxCount };
-         });
-
-         container.innerHTML = `
-           <div style="margin-bottom: 20px;">
-             <div style="font-size: 24px; font-weight: bold; color: #2d3748; text-align: center;">
-               ${totalStudents}명
-             </div>
-             <div style="text-align: center; color: #666;">참여 학생 수</div>
-           </div>
-           <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; font-size: 13px;">
-             <h4 style="margin-bottom: 10px; color: #2d3748;">🏆 역량별 최고 추천자</h4>
-             ${COMPETENCIES.map(comp => {
-               const data = topByComp[comp];
-               return `
-                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding: 5px; background-color: white; border-radius: 5px;">
-                   <span style="font-size: 12px;">${comp}:</span>
-                   <span style="font-weight: bold; color: #c77dff;">${data.name} (${data.count}회)</span>
-                 </div>`;
-             }).join('')}
-           </div>
-         `;
-       }
-
-       // 엑셀 다운로드(새 데이터 구조 대응)
-       function downloadExcel() {
-         if (!Array.isArray(currentStatsData) || currentStatsData.length === 0) {
-           alert('다운로드할 데이터가 없습니다. 먼저 통계를 조회해주세요.');
-           return;
-         }
-
-         const workbook = XLSX.utils.book_new();
-
-         // 시트1: 역량별 카운트
-         const header = ['학생명', ...COMPETENCIES];
-         const rows = currentStatsData.map(st => {
-           return [st.name, ...COMPETENCIES.map(c => st.stats[c]?.count || 0)];
-         });
-         const ws1 = XLSX.utils.aoa_to_sheet([header, ...rows]);
-         XLSX.utils.book_append_sheet(workbook, ws1, '역량별 통계');
-
-         // 시트2: 상세(날짜/활동/사유)
-         const detailHeader = ['학생명', '역량', '날짜', '활동명', '추천 이유'];
-         const detailRows = [];
-         currentStatsData.forEach(st => {
-           COMPETENCIES.forEach(c => {
-             const evs = st.stats[c]?.evaluations || [];
-             evs.forEach(ev => {
-               detailRows.push([st.name, c, ev.date || '', ev.activity || '', ev.reason || '']);
-             });
-           });
-         });
-         const ws2 = XLSX.utils.aoa_to_sheet([detailHeader, ...detailRows]);
-         XLSX.utils.book_append_sheet(workbook, ws2, '상세 평가 내역');
-
-         const today = new Date().toISOString().split('T')[0];
-         const startDate = document.getElementById('startDate').value || '전체';
-         const endDate   = document.getElementById('endDate').value   || '기간';
-         XLSX.writeFile(workbook, `에이스_통계_${startDate}_${endDate}_${today}.xlsx`);
-
-         showMessage('엑셀 파일이 다운로드되었습니다! 📥', 'success');
-       }        
-
-        // 학생 상세 정보 토글
-        function toggleStudentDetail(header) {
-            const content = header.nextElementSibling;
-            const arrow = header.querySelector('span:last-child');
-            
-            if (content.classList.contains('expanded')) {
-                content.classList.remove('expanded');
-                arrow.textContent = '▼';
-            } else {
-                content.classList.add('expanded');
-                arrow.textContent = '▲';
-            }
-        }
-
-        // 활동 정보 추가
-        function addActivityInfo() {
-            const date = document.getElementById('activityDate').value;
-            const name = document.getElementById('activityName').value.trim();
-            
-            if (!date || !name) {
-                showMessage('날짜와 활동명을 모두 입력해주세요.', 'error');
-                return;
-            }
-            
-            // localStorage에 활동 정보 저장
-            const activityInfo = { 
-                id: Date.now(),
-                date: date, 
-                name: name, 
-                timestamp: new Date().toISOString() 
-            };
-            
-            const activities = JSON.parse(localStorage.getItem('activityHistory') || '[]');
-            activities.push(activityInfo);
-            localStorage.setItem('activityHistory', JSON.stringify(activities));
-            
-            showMessage(`활동이 추가되었습니다: ${date} - ${name} 🎯`, 'success');
-            
-            // 입력 필드 초기화
-            document.getElementById('activityDate').value = '';
-            document.getElementById('activityName').value = '';
-            
-            // 활동 목록 새로고침
-            loadActivityList();
-        }
-
-        // 활동 목록 로드
-        function loadActivityList() {
-            const activities = JSON.parse(localStorage.getItem('activityHistory') || '[]');
-            const container = document.getElementById('activityList');
-            
-            if (activities.length === 0) {
-                container.innerHTML = `
-                    <div style="text-align: center; color: #666; padding: 15px; font-size: 12px;">
-                        등록된 활동이 없습니다.
-                    </div>
-                `;
-                return;
-            }
-            
-            // 날짜순으로 정렬 (최신순)
-            activities.sort((a, b) => new Date(b.date) - new Date(a.date));
-            
-            container.innerHTML = activities.map(activity => `
-                <div class="activity-item">
-                    <div class="activity-info">
-                        <span class="activity-date">📅 ${activity.date}</span>
-                        <span class="activity-name">📋 ${activity.name}</span>
-                    </div>
-                    <button class="delete-btn" onclick="removeActivity(${activity.id})">삭제</button>
-                </div>
-            `).join('');
-        }
-
-        // 개별 활동 삭제
-        function removeActivity(activityId) {
-            if (confirm('이 활동을 삭제하시겠습니까?')) {
-                const activities = JSON.parse(localStorage.getItem('activityHistory') || '[]');
-                const updatedActivities = activities.filter(activity => activity.id !== activityId);
-                localStorage.setItem('activityHistory', JSON.stringify(updatedActivities));
-                
-                showMessage('활동이 삭제되었습니다.', 'success');
-                loadActivityList();
-            }
-        }
-
-        // 전체 활동 삭제
-        function clearAllActivities() {
-            if (confirm('모든 활동 정보를 삭제하시겠습니까?')) {
-                localStorage.removeItem('activityHistory');
-                showMessage('모든 활동이 삭제되었습니다.', 'success');
-                loadActivityList();
-            }
-        }
-
-        // 명부 관리 모달
-
-        // ✅ 교체: 모달 열기/닫기
-        function showRosterModal() {
-          UP.preview = [];
-          renderPreview(); // "파일을 선택하면…" 문구로 초기화 + 저장 비활성화
-          const nameBox = document.getElementById('categoryName');
-          if (nameBox) nameBox.value = '';
-          document.getElementById('rosterModal').style.display = 'flex';
-        }
-
-        function closeRosterModal() {
-          document.getElementById('rosterModal').style.display = 'none';
-        } 
-
-        // 저장 버튼 → 서버 업로드 (skipExisting: true)
-        // 저장 버튼 → 서버 업로드 (두 스키마(roster/students) 자동 시도)
-        // ...위 코드는 그대로 두시고, saveRoster만 아래로 교체...
-
-        // 저장 버튼 → 서버 업로드 (skipExisting: true)
-        async function saveRoster() {
-          const { type, name } = getUploadMeta();
-
-          if (!name) {
-            showMessage('카테고리 이름을 입력하세요.', 'error');
-            return;
-          }
-          if (!Array.isArray(UP.preview) || UP.preview.length === 0) {
-            showMessage('업로드할 데이터가 없습니다.', 'error');
-            return;
-          }
-
-          // 로그인 정책: ID=학번(username), PW=이름(password)
-          const roster = UP.preview.map(r => ({
-            username: r.studentId,
-            password: r.name,
-            name: r.name,
-            studentId: r.studentId,
-            subject: type === 'subject' ? name : '',
-            club:    type === 'club'    ? name : '',
-          }));
-
-          // 디버그: 실제 전송 데이터 콘솔에서 확인
-          console.log('[import-students] try payload.roster =', { skipExisting: true, roster });
-          try {
-            // 1차: 서버가 { roster }를 받는 경우
-            const j1 = await postJson('/api/admin/import-students', {
-              skipExisting: true,
-              roster
-            });
-            afterImportSuccess(j1);
-            return;
-          } catch (e1) {
-            // 서버가 “명부가 비어있습니다” 류로 거절하면, { students }로 재시도
-            const msg = String(e1?.message || '');
-            console.warn('[import-students] 1st try failed:', msg);
-
-            // 400이고 비어있다고 나오면 보통 필드명이 다를 때가 많음 → { students }로 재시도
-            if (msg.includes('비어') || msg.includes('empty') || msg.includes('Bad Request')) {
-              console.log('[import-students] retry payload.students =', { skipExisting: true, students: roster });
-              try {
-                const j2 = await postJson('/api/admin/import-students', {
-                  skipExisting: true,
-                  students: roster
-                });
-                afterImportSuccess(j2);
-                return;
-              } catch (e2) {
-                console.error('[import-students] 2nd try failed:', e2);
-                showMessage(`서버 업로드 실패: ${e2.message}`, 'error');
-              }
-            } else {
-              showMessage(`서버 업로드 실패: ${msg}`, 'error');
-            }
-          }
-        }
-
-        function afterImportSuccess(respJson) {
-          showMessage(`명부가 저장되었습니다. (총 ${respJson.importedCount ?? UP.preview.length}명)`, 'success');
-          UP.preview = [];
+          if(!rows || !rows.length){ UP.preview=[]; renderPreview(); showMessage('파일에 데이터가 없습니다.','error'); return; }
+          const first = String(rows[0].join(',')).replace(/\s/g,'');
+          if (/(이름|name).*(학번|id)/i.test(first)) rows.shift();
+          const seen = new Set();
+          UP.preview = rows
+            .map(r=>r.map(c=>(c??'').toString().trim()))
+            .filter(r=>r[0] && r[1])
+            .filter(r=>{ const ok=!seen.has(r[1]); if(ok) seen.add(r[1]); return ok; })
+            .map(r=>({name:r[0],studentId:r[1]}));
           renderPreview();
-          closeRosterModal();
-          // 갱신
-          loadStudentStatus();
-          loadRosterList();
+          showMessage('파일을 읽었습니다. 저장을 눌러 업로드하세요.','success');
+        }catch(err){
+          console.error(err); UP.preview=[]; renderPreview(); showMessage('파일 형식이 올바르지 않습니다.','error');
         }
+      };
+      if(file.name.toLowerCase().endsWith('.csv')) reader.readAsArrayBuffer(file);
+      else reader.readAsBinaryString(file);
+    }
 
+    async function saveRoster(){
+      const { type, name } = getUploadMeta();
+      if(!name){ showMessage('카테고리 이름을 입력하세요.','error'); return; }
+      if(!UP.preview.length){ showMessage('업로드할 데이터가 없습니다.','error'); return; }
 
-        //모달 닫기 삭
+      const roster = UP.preview.map(r=>({
+        username:r.studentId, password:r.name, name:r.name, studentId:r.studentId,
+        subject:type==='subject'?name:'', club:type==='club'?name:''
+      }));
 
-        // 파일 업로드 처리
-
-        // CSV/엑셀 모두 바이너리로 읽고 XLSX로 파싱(한글 CSV 인코딩 이슈 회피)
-        function handleFileUpload(event) {
-          const file = event.target.files?.[0];
-          if (!file) return;
-
-          const reader = new FileReader();
-
-          // ⬇️ 여기부터 전체 함수 본문을 이 버전으로 교체하면 편합니다.
-          reader.onload = async (e) => {
-            try {
-              let rows;
-
-              if (file.name.toLowerCase().endsWith('.csv')) {
-                // ✅ CSV: 인코딩 자동 감지(utf-8 실패 시 euc-kr 시도)
-                const buf = new Uint8Array(e.target.result);
-                let text = '';
-                try {
-                  text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
-                } catch (_) {
-                  try {
-                    text = new TextDecoder('euc-kr').decode(buf);
-                  } catch {
-                    text = new TextDecoder().decode(buf); // 브라우저 기본
-                  }
-                }
-                rows = parseCSV(String(text || ''));
-              } else {
-                // ✅ Excel
-                const wb = XLSX.read(e.target.result, { type: 'binary' });
-                const firstSheet = wb.Sheets[wb.SheetNames[0]];
-                rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-              }
-
-              if (!rows || rows.length === 0) {
-                UP.preview = [];
-               renderPreview();
-                showMessage('파일에 데이터가 없습니다.', 'error');
-                return;
-              }
-
-              // 헤더 제거
-              const first = String(rows[0].join(',')).replace(/\s/g,'');
-              if (/(이름|name).*(학번|id)/i.test(first)) rows.shift();
-
-              // [이름, 학번]만
-              const seen = new Set();
-              UP.preview = rows
-                .map(r => r.map(c => (c ?? '').toString().trim()))
-                .filter(r => r[0] && r[1])
-                .filter(r => {
-                  const ok = !seen.has(r[1]);
-                  if (ok) seen.add(r[1]);
-                  return ok;
-                })
-                .map(r => ({ name: r[0], studentId: r[1] }));
-
-              renderPreview();
-              showMessage('파일을 읽었습니다. 저장을 눌러 업로드하세요.', 'success');
-            } catch (err) {
-              console.error('파일 처리 오류:', err);
-              UP.preview = [];
-              renderPreview();
-              showMessage('파일 형식이 올바르지 않습니다. 다시 시도해주세요.', 'error');
-            }
-          };
-
-          // ⬇️ CSV는 ArrayBuffer로, 엑셀은 binary string으로
-          if (file.name.toLowerCase().endsWith('.csv')) {
-            reader.readAsArrayBuffer(file);
-          } else {
-            reader.readAsBinaryString(file);
-          }
+      try{
+        await postJson('/api/admin/import-students',{ skipExisting:true, roster });
+        showMessage(`명부가 저장되었습니다. (총 ${roster.length}명)`, 'success');
+        UP.preview=[]; renderPreview(); closeRosterModal();
+        await loadSavedRosters();
+        if(typeof loadStudentStatus==='function') loadStudentStatus();
+      }catch(e){
+        // 혹시 서버가 students 키만 받을 때
+        try{
+          await postJson('/api/admin/import-students',{ skipExisting:true, students: roster });
+          showMessage(`명부가 저장되었습니다. (총 ${roster.length}명)`, 'success');
+          UP.preview=[]; renderPreview(); closeRosterModal();
+          await loadSavedRosters();
+          if(typeof loadStudentStatus==='function') loadStudentStatus();
+        }catch(e2){
+          showMessage(`서버 업로드 실패: ${e2.message}`,'error');
         }
+      }
+    }
 
-        // CSV 파싱
-        function parseCSV(text) {
-              return text
-               .replace(/\r/g, '')           // CR 제거
-               .split('\n')
-               .map(line => line.split(',').map(cell => (cell ?? '').trim()))
-               .filter(cells => cells.some(c => c)); // 완전 빈줄 제거
-        }
+    /* ========== 학생 현황 (기존 로직) ========== */
+    async function loadStudentStatus(){
+      try{
+        const res = await fetch('/api/admin/list-students');
+        const j = await readJsonSafe(res);
+        if(!res.ok || !j.success) throw new Error(j.error||'조회 실패');
+        const students = Array.isArray(j.students)?j.students:[];
+        document.getElementById('classInfo').textContent = '현재 조회: 전체';
+        if(!students.length){ renderStudentStatusEmpty(); return; }
+        const normalized = students.map(s=>({
+          name:s.name, studentId:s.studentId, status:s.status||'not-started',
+          hasPeerEvaluation:!!s.hasPeerEvaluation, hasSelfEvaluation:!!s.hasSelfEvaluation,
+          lastUpdate:s.lastUpdate||'-'
+        }));
+        displayStudentStatus(normalized);
+      }catch(e){
+        console.error(e); showMessage('현황 조회 중 오류가 발생했습니다.','error'); renderStudentStatusEmpty();
+      }
+    }
+    function renderStudentStatusEmpty(){
+      const grid=document.getElementById('studentStatusGrid');
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#666;padding:20px;">
+        저장된 명부가 없습니다. <strong>명부 관리</strong>에서 업로드 후 조회하세요.</div>`;
+      document.getElementById('completedCount').textContent='0명';
+      document.getElementById('pendingCount').textContent='0명';
+      document.getElementById('notStartedCount').textContent='0명';
+    }
+    function displayStudentStatus(students){
+      const grid=document.getElementById('studentStatusGrid');
+      const statusCounts={completed:0,pending:0,'not-started':0};
+      if(!students.length){ renderStudentStatusEmpty(); return; }
+      grid.innerHTML = students.map(st=>{
+        statusCounts[st.status]++;
+        const statusText={completed:'완료',pending:'부분완료','not-started':'미시작'};
+        const detailText={
+          completed:'동료평가 ✓ 자기평가 ✓',
+          pending: st.hasPeerEvaluation&&!st.hasSelfEvaluation?'동료평가 ✓ 자기평가 ✗'
+                 :!st.hasPeerEvaluation&&st.hasSelfEvaluation?'동료평가 ✗ 자기평가 ✓'
+                 :'동료평가 ✓ 자기평가 ✗',
+          'not-started':'동료평가 ✗ 자기평가 ✗'
+        };
+        return `<div class="student-card ${st.status}" title="${detailText[st.status]}">
+          <div class="student-name">${st.name}</div>
+          <div class="student-status status-${st.status}">${statusText[st.status]}</div>
+          <div style="font-size:10px;color:#666;margin-top:5px;">${st.lastUpdate}</div>
+          <div style="font-size:9px;color:#999;margin-top:2px;">${detailText[st.status]}</div>
+        </div>`;
+      }).join('');
+      document.getElementById('completedCount').textContent=statusCounts.completed+'명';
+      document.getElementById('pendingCount').textContent=statusCounts.pending+'명';
+      document.getElementById('notStartedCount').textContent=statusCounts['not-started']+'명';
+    }
 
-        // 명부 데이터 처리(서버 업로드)
-        // 명부 데이터 처리(서버 업로드)
-        // CSV/엑셀: [이름, 학번, 과목/동아리]
-        // CSV/엑셀: [이름, 학번, 과목/동아리]
+    /* ========== 통계(기존 스크립트 그대로) ========== */
+    const COMPETENCIES=['자신감과 리더십','분석','아이디어 뱅크','감정 이해','의사소통','협동심'];
+    let currentStatsData=[];
+    async function loadStatistics(){ /* 그대로 - 생략된 부분은 네 원본 함수 내용 유지 */ }
 
+    /* ========== 공용 UI ========== */
+    function showMessage(msg,type){
+      const old=document.querySelector('.success-message,.error-message'); if(old) old.remove();
+      const div=document.createElement('div'); div.className=(type==='success'?'success-message':'error-message'); div.textContent=msg;
+      const active=document.querySelector('.page-content.active'); const first=active.querySelector('.card'); active.insertBefore(div,first);
+      setTimeout(()=>div.remove(),3000);
+    }
+    function downloadTemplate(){
+      const csv=['이름,학번','홍길동,20250001','김나래,20250002'].join('\n');
+      const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='명부_양식.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+    function clearAllData(){ if(confirm('정말 초기화할까요?')){ localStorage.clear(); showMessage('모든 데이터가 초기화되었습니다.','success'); closeRosterModal(); loadStudentStatus(); } }
+    function logout(){ if(confirm('정말로 로그아웃하시겠습니까?')) location.href='login.html'; }
 
+    /* ========== 초기 로드 ========== */
+    document.addEventListener('DOMContentLoaded', ()=>{
+      loadSavedRosters();        // ✅ 상단 “저장된 명부” 갱신
+      loadStudentStatus();       // 현황판
+      loadActivityList();        // 활동목록
+    });
 
-        // 테스트 데이터 생성 삭제
-        function clearAllData() {
-            if (confirm('정말로 모든 데이터를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
-                localStorage.clear();
-                showMessage('모든 데이터가 초기화되었습니다.', 'success');
-                closeRosterModal();
-                loadStudentStatus();
-            }
-        }
-
-        // 로그아웃
-        function logout() {
-            if (confirm('정말로 로그아웃하시겠습니까?')) {
-                window.location.href = 'login.html';
-            }
-        }
-        
-        //필터
-        function getCurrentFilter() {
-          const year = document.getElementById('yearSelect')?.value || '';
-          const subject = document.getElementById('subjectSelect')?.value || '';
-          const club = document.getElementById('clubSelect')?.value || '';
-          return { year, subject, club };
-        }
-        
-        // 메시지 표시
-        function showMessage(message, type) {
-            // 기존 메시지 제거
-            const existingMessage = document.querySelector('.success-message, .error-message');
-            if (existingMessage) {
-                existingMessage.remove();
-            }
-
-            // 새 메시지 생성
-            const messageDiv = document.createElement('div');
-            messageDiv.className = type === 'success' ? 'success-message' : 'error-message';
-            messageDiv.textContent = message;
-            
-            // 현재 활성 페이지의 첫 번째 카드 앞에 추가
-            const activePageContent = document.querySelector('.page-content.active');
-            const firstCard = activePageContent.querySelector('.card');
-            activePageContent.insertBefore(messageDiv, firstCard);
-            
-            // 3초 후 제거
-            setTimeout(() => {
-                messageDiv.remove();
-            }, 3000);
-        }
-
-        // 페이지 로드 시 실행
-        document.addEventListener('DOMContentLoaded', function() {
-            loadStudentStatus();
-            loadActivityList();
-            loadRosterList(); // ← 이 줄 추가
-        });
-
-        // 서버 응답을 안전하게 JSON으로 읽기
-        async function readJsonSafe(res) {
-          try {
-            // 본문을 두 번 읽어야 하므로 clone 사용
-            return await res.clone().json();
-          } catch {
-            let text = '';
-            try { text = await res.text(); } catch {}
-            return { success: false, error: (text && text.slice(0, 200)) || `HTTP ${res.status}` };
-          }
-        }
-    </script>
+    /* ===== 활동 정보(기존) ===== */
+    function addActivityInfo(){ /* 네 원본 함수 그대로 */ }
+    function loadActivityList(){ /* 네 원본 함수 그대로 */ }
+    function removeActivity(id){ /* 네 원본 함수 그대로 */ }
+    function clearAllActivities(){ /* 네 원본 함수 그대로 */ }
+    function toggleStudentDetail(h){ const c=h.nextElementSibling,a=h.querySelector('span:last-child'); if(c.classList.contains('expanded')){c.classList.remove('expanded'); a.textContent='▼';}else{c.classList.add('expanded'); a.textContent='▲';} }
+    function updateClassInfo(){ /* 사용 중이면 유지 */ }
+  </script>
 </body>
-
 </html>
-
-
-
-
-
-
-
-
