@@ -10,118 +10,84 @@ export default async function handler(req, res) {
       return res.status(405).json({ success: false, error: 'Method Not Allowed' });
     }
 
-    // 현재 로그인 사용자
+    // 로그인 정보 → teacherId 계산
     const me = getUserFromReq(req);
-    if (!me || (me.role !== 'teacher' && me.role !== 'super')) {
-      return res.status(401).json({ success: false, error: '로그인 필요' });
-    }
-
-    // 최종 teacherId 계산 (수퍼는 ?teacherId= 로 지정 가능)
     const teacherId =
-      (me && (me.role === 'super' && req.query.teacherId ? req.query.teacherId : (me.teacherId || me.uid || me.email))) ||
+      (me && (me.role === 'super' && req.query.teacherId ? req.query.teacherId : (me.teacherId || me.uid))) ||
       req.query.teacherId ||
       'T_DEFAULT';
 
-    // 본문 파싱
-    let payload = req.body;
-    if (typeof payload === 'string') {
-      try { payload = JSON.parse(payload); } catch (e) { return res.status(400).json({ success:false, error:'Invalid JSON' }); }
+    // body 파싱
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    // 두 가지 스키마 대응: { roster: [...] } 또는 { students: [...] }
+    const rows = Array.isArray(body.roster) ? body.roster : (Array.isArray(body.students) ? body.students : []);
+    if (!rows.length) {
+      return res.status(400).json({ success:false, error:'업로드 데이터가 비어있습니다.' });
     }
-    if (!payload) return res.status(400).json({ success:false, error:'Empty body' });
 
-    // 클라이언트가 roster 또는 students 중 아무 키로 보낼 수 있게 양쪽 다 허용
-    const arr = Array.isArray(payload.roster) ? payload.roster
-              : Array.isArray(payload.students) ? payload.students
-              : [];
-    if (!arr.length) return res.status(400).json({ success:false, error:'명부 배열이 비었습니다.' });
+    const catType = body.categoryType || body.type || '';   // subject | club | ''(없음)
+    const catName = body.categoryName || body.name || '';   // "국어" / "코딩클럽" 등
+    const title   = catName || '무제 명부';
 
-    // 카테고리(과목/동아리) 메타 (없으면 빈 값)
-    const categoryType = payload.categoryType || '';
-    const categoryName = payload.categoryName || '';
-
-    // 1) rosters 문서 생성
-    const nowSV = admin.firestore.FieldValue.serverTimestamp();
+    // 1) rosters 문서 미리 생성
+    const now = admin.firestore.FieldValue.serverTimestamp();
     const rosterRef = db().collection('rosters').doc();
-    const rosterDoc = {
+    const rosterId  = rosterRef.id;
+
+    await rosterRef.set({
       type: 'roster',
       teacherId,
-      name: categoryName || '',
-      categoryType: categoryType || (categoryName ? 'subject' : ''), // name이 있으면 기본 subject
-      title: categoryName ? `${(categoryType === 'club') ? '동아리' : '과목'}: ${categoryName}` : '명부 업로드',
-      itemCount: 0,
+      title,                 // ← 카드에 보일 제목
+      categoryType: catType, // subject | club
+      categoryName: catName,
+      itemCount: 0,          // 업로드 후 갱신
       published: false,
-      createdAt: nowSV,
-      updatedAt: nowSV,
-    };
-    await rosterRef.set(rosterDoc);
-    const rosterId = rosterRef.id;
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true });
 
-    // 2) 학생/유저 문서 저장
+    // 2) students 컬렉션에 저장 (enabled=false로 시작)
     const studentsCol = db().collection('students');
-    const usersCol    = db().collection('users');
-
-    // skipExisting이 true면 기존 학번은 덮어쓰지 않음(merge true 이지만 처음만 생성)
-    const skipExisting = payload.skipExisting !== false;
-
-    // 미리 존재 학번 가져오기(옵션)
-    let existingIds = new Set();
-    if (skipExisting) {
-      const snap = await studentsCol.where('teacherId', '==', teacherId).get();
-      existingIds = new Set(snap.docs.map(d => d.id));
-    }
-
     let batch = db().batch();
-    let ops = 0;
+    let ops   = 0;
     let imported = 0;
 
-    for (const s of arr) {
-      const name = (s.name || s['이름'] || '').toString().trim();
-      const rawId = (s.username || s.studentId || s.id || s['학번'] || s['학생번호'] || '').toString().trim();
-      if (!name || !rawId) continue;
-      if (skipExisting && existingIds.has(rawId)) continue;
+    for (const r of rows) {
+      // 다양한 키 허용
+      const name = (r.name || r['이름'] || '').toString().trim();
+      const sid  = (r.username || r.studentId || r.id || r['학번'] || '').toString().trim();
+      if (!name || !sid) continue;
 
-      const subject = s.subject || (categoryType === 'subject' ? categoryName : '');
-      const club    = s.club    || (categoryType === 'club'    ? categoryName : '');
-      const data = {
-        username: rawId,
-        password: s.password || name,   // 정책: 초기 PW=이름
-        name,
-        studentId: rawId,
+      // 문서 id는 “학번” 그대로 사용(기존 구조 유지)
+      const docRef = studentsCol.doc(sid);
+
+      batch.set(docRef, {
         teacherId,
         rosterId,
-        subject,
-        club,
-        enabled: false,                 // 노출 전까지 비활성
-        createdAt: nowSV,
-        updatedAt: nowSV,
-      };
-
-      const stuRef = studentsCol.doc(rawId);
-      batch.set(stuRef, data, { merge: true });
-
-      // 로그인 테이블(교사별 네임스페이스 키)
-      const userKey = `${teacherId}:${rawId}`;
-      batch.set(usersCol.doc(userKey), {
-        role: 'student',
-        username: rawId,
-        password: data.password,
+        enabled: false,                 // ← ‘현황판 노출’ 켜기 전까지 비활성
+        username: sid,                  // 로그인 아이디
+        password: name,                 // 임시 비밀번호(이름)
         name,
-        teacherId,
-        rosterId,
-        enabled: false,
-        createdAt: nowSV,
-        updatedAt: nowSV,
+        studentId: sid,
+        subject: (catType === 'subject') ? catName : (r.subject || ''),
+        club:    (catType === 'club')    ? catName : (r.club    || ''),
+        createdAt: now,
+        updatedAt: now,
       }, { merge: true });
 
-      imported++; ops++;
+      ops++; imported++;
       if (ops >= 450) { await batch.commit(); batch = db().batch(); ops = 0; }
     }
     if (ops > 0) await batch.commit();
 
     // 3) rosters.itemCount 갱신
-    await rosterRef.set({ itemCount: imported, updatedAt: nowSV }, { merge: true });
+    await rosterRef.set({ itemCount: imported, updatedAt: now }, { merge: true });
 
-    return res.status(200).json({ success:true, importedCount: imported, rosterId });
+    return res.status(200).json({
+      success: true,
+      rosterId,
+      importedCount: imported,
+    });
   } catch (e) {
     console.error('[import-students] error:', e);
     return res.status(500).json({ success:false, error: e?.message || 'server error' });
