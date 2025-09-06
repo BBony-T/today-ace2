@@ -248,7 +248,22 @@
       if(!r.ok || j.success===false) throw new Error(j.error || `HTTP ${r.status}`);
       return j;
     }
-
+    
+    // 날짜 문자열을 'YYYY-MM-DD'로 통일
+    function dateKey(v){
+      if (!v) return '';
+      // 1) 이미 YYYY-MM-DD면 그대로
+      const s = String(v);
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+      // 2) Date로 파싱 후 포맷
+      const d = new Date(s);
+      if (isNaN(+d)) return '';
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      return `${d.getFullYear()}-${mm}-${dd}`;
+    }
+    
     /* ───────── teacherId 확보 ───────── */
     let TEACHER_ID =
       sessionStorage.getItem('teacherId') ||
@@ -616,9 +631,9 @@
 
         const map = {};
         (j.activities || []).forEach(a => {
-          const d = (a.date || '').toString().slice(0,10);
+          const k = dateKey(a.date || a.timestamp);                  // ✅ 날짜 키 통일
           const t = a.title || a.name || a.activity || '';
-          if (d && t) map[d] = t; // 날짜 중복이면 최신/마지막값으로 덮어씀
+          if (k && t) map[k] = t; // 같은 날 여러 건이면 마지막 값으로 덮어씀
         });
         return map;
       } catch (e) {
@@ -725,7 +740,7 @@
         const norm = (s)=> (s||'').toString().trim().toLowerCase();
 
         evals.forEach(ev=>{
-          const dateStr = (ev.date || ev.timestamp || '').toString().slice(0,10);
+          const dateStr = dateKey(ev.date || ev.timestamp);  // ✅
           if (!inRange(dateStr)) return;
 
           const peer = Array.isArray(ev.peerEvaluations) ? ev.peerEvaluations : [];
@@ -1061,6 +1076,7 @@
   </script>
 </body>
 </html>
+
 
 
 
