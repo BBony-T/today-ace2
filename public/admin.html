@@ -222,6 +222,9 @@
   </div>
 
   <script>
+    // ▼ 전역 선택 상태 (가장 위에 두기)
+    let SELECTED_ROSTER_ID = null;
+    let SELECTED_ROSTER_TITLE = '';
     /* ───────── 공통 유틸 ───────── */
     async function readJsonSafe(res){
       try{ return await res.clone().json(); }
@@ -325,7 +328,7 @@
           const active = !!(r.active || r.published);
           return `
             <div class="roster-item">
-              <div class="roster-main">
+              <div class="roster-main js-view" data-id="${r.id}" data-title="${title}">
                 <div style="font-weight:700">${title}
                   <span class="tag">${cnt}명</span>
                   ${active ? '<span class="tag" style="border-color:#c7ffe0;background:#f2fff8">노출중</span>' : ''}
@@ -340,41 +343,69 @@
           `;
         }).join('');
 
-        // 토글
-        box.querySelectorAll('.js-publish').forEach(el=>{
-          el.onchange = async () => {
-            const id = el.dataset.id;
-            const publish = el.checked;
-            el.disabled = true;
-            try{
-              const tid = await ensureTeacherId();
-              await postJson('/api/admin/publish-roster?teacherId=' + encodeURIComponent(tid),
-                             { rosterId:id, publish });
-              await loadSavedRosters();
-              await refreshStatsFiltersFromRosters(); // ← 추가
-              await loadStudentStatus();     // 활성 명부 바뀌면 현황판도 갱신
-            }catch(e){
-              alert('노출 설정 실패: ' + (e.message || 'unknown'));
-              el.checked = !publish;
-            }finally{ el.disabled=false; }
+        // ▶ 명부 본문 클릭 → 해당 명부로 현황판 조회
+        box.querySelectorAll('.js-view').forEach(el => {
+          el.onclick = async () => {
+            SELECTED_ROSTER_ID = el.dataset.id;
+            SELECTED_ROSTER_TITLE = el.dataset.title || '';
+            await loadStudentStatus({ rosterId: SELECTED_ROSTER_ID });
           };
         });
 
-        // 삭제
-        box.querySelectorAll('.js-del').forEach(btn=>{
+        // ▶ 노출 토글
+        box.querySelectorAll('.js-publish').forEach(el => {
+          el.onchange = async () => {
+            const publish = el.checked;
+            el.disabled = true;
+            try {
+              const tid = await ensureTeacherId();
+              await postJson('/api/admin/publish-roster?teacherId=' + encodeURIComponent(tid), {
+                rosterId: el.dataset.id, publish
+              });
+              await refreshStatsFiltersFromRosters();
+
+              // 현재 선택 유지(선택 없으면 빈 화면 유지)
+              if (SELECTED_ROSTER_ID) await loadStudentStatus({ rosterId: SELECTED_ROSTER_ID });
+              else await loadStudentStatus({ forceEmpty: true });
+            } catch (e) {
+              alert('노출 설정 실패: ' + (e.message || 'unknown'));
+              el.checked = !publish;
+            } finally {
+              el.disabled = false;
+            }
+          };
+        });
+
+        // ▶ 삭제
+        box.querySelectorAll('.js-del').forEach(btn => {
           btn.onclick = async () => {
             if (!confirm('이 명부를 삭제하시겠습니까?')) return;
+            const deletedId = btn.dataset.id;
             btn.disabled = true;
-            try{
+            try {
               const tid = await ensureTeacherId();
-              await postJson('/api/admin/delete-roster?teacherId=' + encodeURIComponent(tid),
-                             { rosterId: btn.dataset.id });
+              await postJson('/api/admin/delete-roster?teacherId=' + encodeURIComponent(tid), {
+               rosterId: deletedId
+              });
+
+              // 선택된 걸 삭제했다면 선택 해제 + 빈 화면
+              if (SELECTED_ROSTER_ID === deletedId) {
+                SELECTED_ROSTER_ID = null;
+                SELECTED_ROSTER_TITLE = '';
+                await loadStudentStatus({ forceEmpty: true });
+              } else if (SELECTED_ROSTER_ID) {
+                await loadStudentStatus({ rosterId: SELECTED_ROSTER_ID });
+              } else {
+                await loadStudentStatus({ forceEmpty: true });
+              }
+
               await loadSavedRosters();
-              await refreshStatsFiltersFromRosters(); // ← 추가
-              await loadStudentStatus();
-            }catch(e){
+              await refreshStatsFiltersFromRosters();
+            } catch (e) {
               alert('삭제 실패: ' + (e.message || 'unknown'));
-            }finally{ btn.disabled=false; }
+            } finally {
+              btn.disabled = false;
+            }
           };
         });
 
@@ -458,39 +489,29 @@
 
       try{
         const tid = await ensureTeacherId();
-        // ✅ 서버가 요구하는 형태: teacherId 를 쿼리스트링으로 전달
         const url = '/api/admin/import-students?teacherId=' + encodeURIComponent(tid);
-
-        await postJson(url, {
-          skipExisting: true,
-          categoryType: type,
-          categoryName: name,
-          roster
-        });
+        await postJson(url, { skipExisting:true, categoryType:type, categoryName:name, roster });
 
         showMessage(`명부가 저장되었습니다. (총 ${roster.length}명)`, 'success');
         UP.preview=[]; renderPreview(); closeRosterModal();
         await loadSavedRosters();
         await refreshStatsFiltersFromRosters();
-        await loadStudentStatus();
-
+        await loadStudentStatus({ forceEmpty:true }); // 업로드 직후 자동표시 금지
       }catch(e){
-        // 백엔드가 students 키만 받을 수 있는 경우 대비 재시도 (여기도 쿼리 유지)
         try{
           const tid = await ensureTeacherId();
           const url2 = '/api/admin/import-students?teacherId=' + encodeURIComponent(tid);
-
           await postJson(url2, { skipExisting:true, students: roster });
-
           showMessage(`명부가 저장되었습니다. (총 ${roster.length}명)`, 'success');
           UP.preview=[]; renderPreview(); closeRosterModal();
           await loadSavedRosters();
-          await loadStudentStatus();
+          await loadStudentStatus({ forceEmpty:true });
         }catch(e2){
           showMessage(`서버 업로드 실패: ${e2.message}`,'error');
         }
       }
     }
+
 
     // ...아래 코드는 그대로...
 
@@ -637,6 +658,7 @@
   </script>
 </body>
 </html>
+
 
 
 
