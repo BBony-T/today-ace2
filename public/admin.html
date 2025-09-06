@@ -443,6 +443,9 @@
       else reader.readAsBinaryString(file);
     }
 
+    
+    // ...위 코드는 그대로...
+
     async function saveRoster(){
       const { type, name } = getUploadMeta();
       if(!name){ showMessage('카테고리 이름을 입력하세요.','error'); return; }
@@ -455,23 +458,30 @@
 
       try{
         const tid = await ensureTeacherId();
-        await postJson('/api/admin/import-students', {
+        // ✅ 서버가 요구하는 형태: teacherId 를 쿼리스트링으로 전달
+        const url = '/api/admin/import-students?teacherId=' + encodeURIComponent(tid);
+
+        await postJson(url, {
           skipExisting: true,
           categoryType: type,
           categoryName: name,
-          teacherId: tid,            // 서버가 사용할 수 있도록 전달(선택)
-          roster                     // 서버는 이 배열로 학생 문서를 만듦
+          roster
         });
+
         showMessage(`명부가 저장되었습니다. (총 ${roster.length}명)`, 'success');
         UP.preview=[]; renderPreview(); closeRosterModal();
         await loadSavedRosters();
-        await refreshStatsFiltersFromRosters(); // ← 추가
+        await refreshStatsFiltersFromRosters();
         await loadStudentStatus();
+
       }catch(e){
-        // 혹시 서버가 students 키만 받을 때 재시도
+        // 백엔드가 students 키만 받을 수 있는 경우 대비 재시도 (여기도 쿼리 유지)
         try{
           const tid = await ensureTeacherId();
-          await postJson('/api/admin/import-students', { skipExisting:true, teacherId: tid, students: roster });
+          const url2 = '/api/admin/import-students?teacherId=' + encodeURIComponent(tid);
+
+          await postJson(url2, { skipExisting:true, students: roster });
+
           showMessage(`명부가 저장되었습니다. (총 ${roster.length}명)`, 'success');
           UP.preview=[]; renderPreview(); closeRosterModal();
           await loadSavedRosters();
@@ -481,6 +491,8 @@
         }
       }
     }
+
+    // ...아래 코드는 그대로...
 
     /* ───────── 학생 현황 ───────── */
     async function loadStudentStatus() {
@@ -625,5 +637,6 @@
   </script>
 </body>
 </html>
+
 
 
