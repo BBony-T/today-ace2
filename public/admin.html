@@ -663,6 +663,23 @@
       }
     }
 
+    function pickReasonForTarget(p, idx, rawTarget) {
+      // 1) 배열형 매칭 (nominees와 동일 인덱스)
+      if (Array.isArray(p.reasons) && typeof p.reasons[idx] === 'string') {
+        return p.reasons[idx];
+      }
+      // 2) 이름/학번 키로 오는 경우(예: { "홍길동": "..." })
+      if (p.reasonsByName && typeof p.reasonsByName === 'object') {
+        const t = (rawTarget||'').toString().trim();
+        if (t && typeof p.reasonsByName[t] === 'string') return p.reasonsByName[t];
+      }
+      // 3) 단일 reason 필드
+      if (typeof p.reason === 'string') return p.reason;
+      // 4) 없으면 빈 문자열
+      return '';
+    }
+
+    
     // ★★★ 통계 조회 구현
     async function loadStatistics(){
       const resultBox = document.getElementById('statisticsResults');
@@ -776,10 +793,7 @@
                 if (!okById && !okByName) return;
               }
 
-              // 이유 결정: nominees/idx에 맞춰 reasons[index] 우선 → 단일 reason → 공백
-              let reasonText = '';
-              if (reasonsArr && typeof reasonsArr[idx] === 'string') reasonText = reasonsArr[idx];
-              else if (singleReason) reasonText = singleReason;
+              const reasonText = pickReasonForTarget(p, idx, t, sid, nm);
 
               const row = ensureRow(sid, nm || t);
               row.totals[comp] += 1;
@@ -1076,6 +1090,7 @@
   </script>
 </body>
 </html>
+
 
 
 
