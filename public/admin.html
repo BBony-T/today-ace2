@@ -536,7 +536,8 @@
     async function loadStudentStatus(opts = {}) {
       const { rosterId = null, forceEmpty = false } = opts;
 
-      if (forceEmpty && !rosterId) {
+      // ✅ 선택(또는 강제 비움) 없으면 무조건 빈 화면
+      if (!rosterId || (forceEmpty && !rosterId)) {
         renderStudentStatusEmpty();
         document.getElementById('classInfo').textContent = '현재 조회: (선택 필요)';
         return;
@@ -545,35 +546,29 @@
       try {
         const tid = await ensureTeacherId();
 
-        // 1) 요청 URL: 서버 구현 차이를 대비해 파라미터명을 세 가지 모두 붙임
-        let url = `/api/admin/list-students?teacherId=${encodeURIComponent(tid)}&_=${Date.now()}`;
-        if (rosterId) {
-          const rid = encodeURIComponent(rosterId);
-          url += `&rosterId=${rid}&rid=${rid}&roster=${rid}`;
-        } else {
-          // 선택 안 했을 때는 '노출중(공개)'만 보기용으로
-          url += `&onlyActive=1`;
-        }
+        // 요청 URL (파라미터명 차이 대비)
+        const rid = encodeURIComponent(rosterId);
+        const url =
+          `/api/admin/list-students?teacherId=${encodeURIComponent(tid)}&_=${Date.now()}` +
+          `&rosterId=${rid}&rid=${rid}&roster=${rid}`;
 
         const res = await fetch(url, { cache: 'no-store', credentials: 'include' });
         const j = await res.json();
         if (!res.ok || j.success === false) throw new Error(j.error || '조회 실패');
-
-        // 2) 응답 보정: 혹시 서버가 전체를 돌려줘도 프런트에서 한 번 더 거른다
+    
+        // 응답 보정: 혹시 전체가 오면 rosterId/teacherId로 한 번 더 거른다
         let students = Array.isArray(j.students) ? j.students : [];
-        if (rosterId) {
-          students = students.filter(s => {
-            const r = (s.rosterId || s.roster || s.rid);
-            const t = (s.teacherId || s.tid || s.ownerId);
-            return r === rosterId && (!t || t === tid); // rosterId 일치 + (있다면) 내 teacherId 일치
-          });
-        }
+        students = students.filter(s => {
+          const r = (s.rosterId || s.roster || s.rid);
+          const t = (s.teacherId || s.tid || s.ownerId);
+          return r === rosterId && (!t || t === tid);
+        });
 
         document.getElementById('classInfo').textContent =
-          rosterId ? `현재 조회: ${SELECTED_ROSTER_TITLE || '선택된 명부'}` : '현재 조회: (선택 필요)';
+          `현재 조회: ${SELECTED_ROSTER_TITLE || '선택된 명부'}`;
 
         if (!students.length) { renderStudentStatusEmpty(); return; }
-
+    
         const normalized = students.map(s => ({
           name: s.name,
           studentId: s.studentId,
@@ -589,7 +584,6 @@
         renderStudentStatusEmpty();
       }
     }
-
 
     function renderStudentStatusEmpty(){
       const grid=document.getElementById('studentStatusGrid');
@@ -701,6 +695,7 @@
   </script>
 </body>
 </html>
+
 
 
 
