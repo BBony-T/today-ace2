@@ -1,93 +1,105 @@
 // /api/admin/import-students.js
 import { db } from '../_fb.js';
 import admin from 'firebase-admin';
-import { getSession } from '../_shared/initAdmin.js'; // 세션에서 teacherId 꺼내는 헬퍼
-
-const t = s => (s ?? '').toString().trim();
 
 export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+  }
+
+  // teacherId 는 쿼리로 받습니다. (프런트에서 붙여줌)
+  const teacherId = String(req.query.teacherId || '').trim();
+
+  let body = {};
   try {
-    if (req.method !== 'POST') return res.status(405).json({ success:false, error:'Method Not Allowed' });
+    body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+  } catch (e) {
+    return res.status(400).json({ success: false, error: 'Invalid JSON body' });
+  }
 
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const {
-      categoryType = 'subject',   // 'subject' | 'club'
-      categoryName = '',
-      roster = [],                // [{name, studentId}, ...]
-      skipExisting = false
-    } = body || {};
+  const {
+    categoryType = 'subject',         // 'subject' | 'club'
+    categoryName = '',
+    roster = [],
+    skipExisting = true
+  } = body;
 
-    const sess = await getSession(req); // { teacherId, ... }
-    const teacherId = sess?.teacherId || body.teacherId || null;
-    if (!teacherId) return res.status(401).json({ success:false, error:'교사 로그인 필요' });
+  if (!teacherId) {
+    return res.status(400).json({ success: false, error: 'teacherId required' });
+  }
+  if (!Array.isArray(roster) || roster.length === 0) {
+    return res.status(400).json({ success: false, error: 'roster empty' });
+  }
 
-    if (!Array.isArray(roster) || roster.length === 0) {
-      return res.status(400).json({ success:false, error:'roster 비어있음' });
-    }
+  const now = admin.firestore.FieldValue.serverTimestamp();
 
-    // 1) roster 문서 만들기
-    const now = admin.firestore.FieldValue.serverTimestamp();
-    const rRef = db().collection('rosters').doc();
-    const rosterId = rRef.id;
+  try {
+    // 1) 명부 문서 생성
+    const rosterRef = db().collection('rosters').doc();
+    const rosterId = rosterRef.id;
 
-    await rRef.set({
+    await rosterRef.set({
       id: rosterId,
       teacherId,
-      title: categoryName || '무제 명부',
       categoryType,
       categoryName,
-      count: roster.length,
-      active: false,         // 현황판 노출은 따로 토글
+      title: categoryName || '무제 명부',
+      itemCount: roster.length,
+      active: false,
       createdAt: now,
-      updatedAt: now,
+      updatedAt: now
     });
 
-    // 2) 학생 upsert (항상 enabled: true)
-    let created = 0, updated = 0;
-    const batchSize = 400;
-    for (let i=0; i<roster.length; i+=batchSize) {
-      const chunk = roster.slice(i, i+batchSize);
-      const batch = db().batch();
+    // 2) 학생들 업서트
+    const batch = db().batch();
+    let upserts = 0;
 
-      for (const raw of chunk) {
-        const name = t(raw.name);
-        const studentId = t(raw.studentId);
-        if (!name || !studentId) continue;
+    for (const r of roster) {
+      const rawId = (r.studentId ?? r.username ?? '').toString().trim();
+      const rawName = (r.name ?? r.password ?? '').toString().trim();
 
-        // 문서를 studentId로 고정하면 조회/로그인 편함
-        const sRef = db().collection('students').doc(studentId);
-        const sSnap = await sRef.get();
+      // 비어있거나 슬래시 포함 등 Firestore 문서 ID로 쓸 수 없는 값은 건너뜀
+      if (!rawId || rawId.includes('/')) continue;
+      if (!rawName) continue;
 
-        const patch = {
-          name,
-          studentId,
-          username: studentId,
-          password: name,     // 기본 비번은 이름
-          teacherId,
-          rosterId,
-          subject: categoryType === 'subject' ? categoryName : '',
-          club:    categoryType === 'club'    ? categoryName : '',
-          enabled: true,       // ✅ 업로드 즉시 로그인 가능
-          updatedAt: now,
-        };
+      const docRef = db().collection('students').doc(rawId);
+      const data = {
+        studentId: rawId,
+        username: rawId,
+        name: rawName,
+        password: rawName,     // ← 이름을 기본 비번으로
+        teacherId,
+        rosterId,
+        enabled: true,         // ← 항상 로그인 가능
+        subject: categoryType === 'subject' ? categoryName : '',
+        club:    categoryType === 'club'    ? categoryName : '',
+        updatedAt: now
+      };
 
-        if (!sSnap.exists) {
-          batch.set(sRef, {
-            ...patch,
-            createdAt: now,
-          });
-          created++;
-        } else if (!skipExisting) {
-          batch.set(sRef, patch, { merge: true });
-          updated++;
-        }
+      // 기존 문서 보호 옵션
+      if (skipExisting) {
+        batch.set(docRef, data, { merge: true });
+      } else {
+        batch.set(docRef, { ...data, createdAt: now });
       }
-      await batch.commit();
+      upserts++;
     }
 
-    return res.status(200).json({ success:true, rosterId, created, updated, total: roster.length });
+    await batch.commit();
+
+    return res.status(200).json({
+      success: true,
+      rosterId,
+      count: roster.length,
+      upserts
+    });
   } catch (e) {
-    console.error('[import-students] error', e);
-    return res.status(500).json({ success:false, error: e?.message || 'server error' });
+    console.error('[import-students] error:', e);
+    // ← 여기서 에러 메시지/코드가 그대로 Network Response에 노출됩니다.
+    return res.status(500).json({
+      success: false,
+      error: e?.message || 'server error',
+      code: e?.code || null
+    });
   }
 }
