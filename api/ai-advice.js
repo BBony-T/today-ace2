@@ -18,24 +18,27 @@ function safeJson(v, max = 4000) {
   }
 }
 
-async function callGemini({ career, statsSummary, stats, username, rosterId }) {
+async function callGemini({ career, statsSummary, stats, username, rosterId, studentName }) {
   if (!API_KEY) {
-    return {
-      ok: false,
-      error: 'NO_API_KEY'
-    };
+    return { ok: false, error: 'NO_API_KEY' };
   }
 
   const genAI = new GoogleGenerativeAI(API_KEY);
   const model = genAI.getGenerativeModel({ model: MODEL });
 
-  // — 친절 / 응원 톤으로 프롬프트 구성 —
+  // ── (A) 호칭 규칙만 최상단에 주입: 이름 학생 / 학번/아이디 금지 ──
+  const displayName = toStr(studentName).trim() || '학생';
+  const honorificRule =
+    `호칭은 반드시 "${displayName} 학생"으로만 부르세요. ` +
+    `학번/아이디/숫자 표기는 절대 쓰지 마세요.`;
+
+  // ── (B) 기존 프롬프트(시스템/유저 컨텍스트)는 그대로 유지 ──
   const system = [
     '너는 학생의 강점을 먼저 칭찬하고, 따뜻하게 격려하는 멘토야.',
     '명령조 대신 제안/권유형 어조를 사용하고, 부담스럽지 않은 작은 실천을 제시해.',
     '먼저 최다 추천 역량에 대한 칭찬과 구체적 강점 설명을 2~3문장으로 써줘.',
     '그 다음 관심 진로나 활동과 연결해 키워나갈 방법을 3~5가지 정도 제안해줘.',
-    '문단 사이에는 공백 줄 없이 자연스러운 문장 흐름으로 작성해.',
+    '문단 사이에는 공백 줄 없이 자연스러운 문장 흐름으로 작성해.'
   ].join(' ');
 
   const userContext = [
@@ -50,13 +53,12 @@ async function callGemini({ career, statsSummary, stats, username, rosterId }) {
     safeJson(stats, 1800),
   ].join('\n');
 
-  const prompt = `${system}\n\n${userContext}\n\n위 정보를 바탕으로 학생에게 맞춘 성장 조언을 작성해줘.`;
+  // 🔸 최종 프롬프트 = (호칭 규칙) + (기존 프롬프트)
+  const prompt = `${honorificRule}\n\n${system}\n\n${userContext}\n\n위 정보를 바탕으로 학생에게 맞춘 성장 조언을 작성해줘.`;
 
   const result = await model.generateContent(prompt);
   const text = result?.response?.text?.();
-  if (!text) {
-    return { ok: false, error: 'EMPTY_RESPONSE' };
-  }
+  if (!text) return { ok: false, error: 'EMPTY_RESPONSE' };
   return { ok: true, text };
 }
 
@@ -80,7 +82,7 @@ export default async function handler(req, res) {
     let body = {};
     try {
       body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    } catch (e) {
+    } catch {
       return res.status(200).json({ success: false, error: 'INVALID_JSON_BODY' });
     }
 
@@ -90,6 +92,8 @@ export default async function handler(req, res) {
       stats: body.stats || {},
       username: toStr(body.username).trim(),
       rosterId: toStr(body.rosterId || '').trim() || null,
+      // ← 학생 이름(없으면 서버에서 '학생'으로 처리)
+      studentName: toStr(body.studentName).trim(),
     };
 
     // ---- Gemini 호출 (모든 에러는 200으로 감싸서 반환) ----
@@ -104,7 +108,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: false, error: 'GEN_AI_EXCEPTION' });
     }
   } catch (e) {
-    // 절대 500 던지지 않도록 마지막 방어선
     console.error('[ai-advice] unhandled:', e);
     return res.status(200).json({ success: false, error: 'UNHANDLED' });
   }
