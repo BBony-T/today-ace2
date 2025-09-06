@@ -73,7 +73,8 @@
       <p>선생님, 안녕하세요!</p>
     </div>
     <button class="menu-item active" onclick="showPage('status', this)">📋 현황 페이지</button>
-    <button class="menu-item" onclick="showPage('statistics, this')">📊 통계 페이지</button>
+    <!-- 🔧 오타 수정 -->
+    <button class="menu-item" onclick="showPage('statistics', this)">📊 통계 페이지</button>
     <button class="logout-btn" onclick="logout()">🚪 로그아웃</button>
   </div>
 
@@ -128,7 +129,7 @@
       </div>
     </div>
 
-    <!-- 통계 페이지 (요약만, 나머지는 기존과 동일) -->
+    <!-- 통계 페이지 -->
     <div id="statisticsPage" class="page-content">
       <div class="card orange">
         <h3>📈 통계 조회</h3>
@@ -181,7 +182,7 @@
     </div>
   </div>
 
-  <!-- 명부 업로드 모달 -->
+  <!-- 명부 업로드 모달 (생략: 기존과 동일) -->
   <div id="rosterModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;">
     <div style="background:#fff;padding:28px;border-radius:16px;width:min(560px,92%);">
       <h3 style="margin-bottom:16px;text-align:center;">📋 명부 업로드</h3>
@@ -224,13 +225,14 @@
     // ▼ 전역 선택 상태 (가장 위에 두기)
     let SELECTED_ROSTER_ID = null;
     let SELECTED_ROSTER_TITLE = '';
+
     /* ───────── 공통 유틸 ───────── */
     async function readJsonSafe(res){
       try{ return await res.clone().json(); }
       catch{ let t=''; try{ t=await res.text(); }catch{}; return {success:false,error:(t && t.slice(0,200))||`HTTP ${res.status}`} }
     }
     async function getJson(url){
-      const r = await fetch(url,{credentials:'include'});
+      const r = await fetch(url,{credentials:'include', cache:'no-store'});
       const j = await readJsonSafe(r);
       if(!r.ok || j.success===false) throw new Error(j.error || `HTTP ${r.status}`);
       return j;
@@ -247,54 +249,45 @@
       return j;
     }
 
-    /* ───────── teacherId 확보(세션 → whoami 1회 시도 → 기본값) ───────── */
+    /* ───────── teacherId 확보 ───────── */
     let TEACHER_ID =
       sessionStorage.getItem('teacherId') ||
       sessionStorage.getItem('username') || '';
 
-    let _whoamiOnce = null; // 메모이즈(최대 1회만 네트워크 시도)
-
+    let _whoamiOnce = null;
     async function ensureTeacherId() {
       if (TEACHER_ID) return TEACHER_ID;
-
       if (!_whoamiOnce) {
-        _whoamiOnce = fetch('/api/auth/whoami', {
-          credentials: 'include',
-          cache: 'no-store'
-        })
-        .then(async (r) => {
-          if (!r.ok) throw new Error('no whoami');
-          const j = await r.json();
+        _whoamiOnce = fetch('/api/auth/whoami', { credentials:'include', cache:'no-store' })
+        .then(async (r)=>{ if(!r.ok) throw 0; const j=await r.json();
           TEACHER_ID = j?.teacherId || j?.uid || j?.email || 'T_DEFAULT';
           sessionStorage.setItem('teacherId', TEACHER_ID);
           return TEACHER_ID;
         })
-        .catch(() => {
-          // 조용히 세션/기본값으로
-          TEACHER_ID =
-            sessionStorage.getItem('teacherId') ||
-            sessionStorage.getItem('username') ||
-            'T_DEFAULT';
+        .catch(()=> {
+          TEACHER_ID = sessionStorage.getItem('teacherId') || sessionStorage.getItem('username') || 'T_DEFAULT';
           return TEACHER_ID;
         });
       }
       return _whoamiOnce;
     }
+    function getTeacherId(){ return TEACHER_ID || 'T_DEFAULT'; }
 
-    function getTeacherId() { return TEACHER_ID || 'T_DEFAULT'; }
-
-    
     /* ───────── 페이지 전환 ───────── */
     function showPage(pageType, el){
       document.querySelectorAll('.menu-item').forEach(b=>b.classList.remove('active'));
       if (el) el.classList.add('active');
       document.querySelectorAll('.page-content').forEach(x=>x.classList.remove('active'));
-      if(pageType==='status'){document.getElementById('statusPage').classList.add('active');
-                              loadStudentStatus({ forceEmpty: true }); }// 선택 전엔 항상 비워둠
-      else { document.getElementById('statisticsPage').classList.add('active'); loadStatistics(); }
+      if(pageType==='status'){
+        document.getElementById('statusPage').classList.add('active');
+        loadStudentStatus({ forceEmpty: true });
+      }else{
+        document.getElementById('statisticsPage').classList.add('active');
+        loadStatistics();
+      }
     }
 
-    /* ───────── 저장된 명부 목록 ───────── */
+    /* ───────── 저장된 명부 목록 (현황) ───────── */
     function rosterTitle(r){ return r.title || r.name || r.categoryName || '명부'; }
     function rosterCount(r){ return (r.itemCount ?? r.count ?? r.studentCount ?? 0); }
 
@@ -345,7 +338,7 @@
           };
         });
 
-        // ▶ 노출 토글 (체크하면 그 명부를 바로 보여줌)
+        // ▶ 노출 토글
         box.querySelectorAll('.js-publish').forEach(el => {
           el.onchange = async () => {
             const publish = el.checked;
@@ -359,19 +352,16 @@
               await refreshStatsFiltersFromRosters();
 
               if (publish) {
-                // ON: 방금 토글한 명부를 바로 보여줌
                 SELECTED_ROSTER_ID = thisId;
                 const viewEl = box.querySelector(`.js-view[data-id="${thisId}"]`);
                 SELECTED_ROSTER_TITLE = viewEl?.dataset.title || '';
                 await loadStudentStatus({ rosterId: SELECTED_ROSTER_ID });
               } else {
-                // OFF: 현재 표시 중인 명부였다면 선택 해제하고 빈 화면
                 if (SELECTED_ROSTER_ID === thisId) {
                   SELECTED_ROSTER_ID = null;
                   SELECTED_ROSTER_TITLE = '';
                   await loadStudentStatus({ forceEmpty: true });
                 } else if (SELECTED_ROSTER_ID) {
-                  // 다른 명부가 선택돼 있었다면 그대로 유지
                   await loadStudentStatus({ rosterId: SELECTED_ROSTER_ID });
                 } else {
                   await loadStudentStatus({ forceEmpty: true });
@@ -398,7 +388,6 @@
                rosterId: deletedId
               });
 
-              // 선택된 걸 삭제했다면 선택 해제 + 빈 화면
               if (SELECTED_ROSTER_ID === deletedId) {
                 SELECTED_ROSTER_ID = null;
                 SELECTED_ROSTER_TITLE = '';
@@ -425,7 +414,7 @@
       }
     }
 
-    /* ───────── 업로드 ───────── */
+    /* ───────── 업로드 (기존) ───────── */
     const UP = { preview: [] };
     function getUploadMeta(){
       const type = (document.querySelector('input[name="catType"]:checked')?.value)||'subject';
@@ -484,9 +473,6 @@
       else reader.readAsBinaryString(file);
     }
 
-    
-    // ...위 코드는 그대로...
-
     async function saveRoster(){
       const { type, name } = getUploadMeta();
       if(!name){ showMessage('카테고리 이름을 입력하세요.','error'); return; }
@@ -522,14 +508,10 @@
       }
     }
 
-
-    // ...아래 코드는 그대로...
-
     /* ───────── 학생 현황 ───────── */
     async function loadStudentStatus(opts = {}) {
       const { rosterId = null, forceEmpty = false } = opts;
 
-      // ✅ 선택(또는 강제 비움) 없으면 무조건 빈 화면
       if (!rosterId || (forceEmpty && !rosterId)) {
         renderStudentStatusEmpty();
         document.getElementById('classInfo').textContent = '현재 조회: (선택 필요)';
@@ -539,7 +521,6 @@
       try {
         const tid = await ensureTeacherId();
 
-        // 요청 URL (파라미터명 차이 대비)
         const rid = encodeURIComponent(rosterId);
         const url =
           `/api/admin/list-students?teacherId=${encodeURIComponent(tid)}&_=${Date.now()}` +
@@ -549,7 +530,6 @@
         const j = await res.json();
         if (!res.ok || j.success === false) throw new Error(j.error || '조회 실패');
     
-        // 응답 보정: 혹시 전체가 오면 rosterId/teacherId로 한 번 더 거른다
         let students = Array.isArray(j.students) ? j.students : [];
         students = students.filter(s => {
           const r = (s.rosterId || s.roster || s.rid);
@@ -614,9 +594,188 @@
 
     /* ───────── 통계(요약) ───────── */
     const COMPETENCIES=['자신감과 리더십','분석','아이디어 뱅크','감정 이해','의사소통','협동심'];
-    let currentStatsData=[];
-    function loadStatistics(){ /* 기존 구현 사용 */ }
-    function downloadExcel(){ /* 기존 구현 사용 */ }
+    let currentStatsData=[]; // [{studentId,name,counts:{},total}]
+
+    // 명부 드롭다운 채우기
+    async function refreshStatsFiltersFromRosters() {
+      const sel = document.getElementById('statsRosterSelect');
+      if (!sel) return;
+      try {
+        const tid = await ensureTeacherId();
+        const { rosters = [] } = await getJson('/api/admin/list-rosters?teacherId=' + encodeURIComponent(tid));
+        const titleOf = (r) => (r?.categoryName || r?.title || '무제 명부') + (r?.categoryType ? ` · ${r.categoryType}` : '');
+        const countOf = (r) => (r?.itemCount ?? r?.count ?? 0);
+        const opts = [
+          '<option value="">전체 명부</option>',
+          ...rosters.map(r=>`<option value="${r.id}">${titleOf(r)} (${countOf(r)}명)</option>`)
+        ];
+        sel.innerHTML = opts.join('');
+      } catch (e) {
+        console.warn('[refreshStatsFiltersFromRosters] fail:', e);
+        document.getElementById('statsRosterSelect').innerHTML =
+          '<option value="">전체 명부</option>';
+      }
+    }
+
+    // ★★★ 통계 조회 구현
+    async function loadStatistics(){
+      const resultBox = document.getElementById('statisticsResults');
+      const summaryBox = document.getElementById('summaryStats');
+      resultBox.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">불러오는 중…</div>';
+      summaryBox.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">불러오는 중…</div>';
+
+      try{
+        const tid = await ensureTeacherId();
+        const rosterId = (document.getElementById('statsRosterSelect')?.value || '').trim();
+        const from = (document.getElementById('startDate')?.value || '').trim();
+        const to   = (document.getElementById('endDate')?.value || '').trim();
+
+        // (선택) 명부 학생 목록 → 학번→이름 매핑
+        let idToName = {};
+        if (rosterId) {
+          try {
+            const rid = encodeURIComponent(rosterId);
+            const j = await getJson(`/api/admin/list-students?teacherId=${encodeURIComponent(tid)}&rosterId=${rid}&rid=${rid}`);
+            const arr = Array.isArray(j.students) ? j.students : [];
+            arr.forEach(s=>{ if(s.studentId) idToName[s.studentId]=s.name || s.studentName || s.username; });
+          } catch(e){}
+        }
+
+        // 1) 서버 집계 API 우선 시도
+        let aggregated = null;
+        try{
+          let url = `/api/student/get-statistics?teacherId=${encodeURIComponent(tid)}`;
+          if (rosterId) url += `&rosterId=${encodeURIComponent(rosterId)}`;
+          if (from) url += `&from=${encodeURIComponent(from)}`;
+          if (to)   url += `&to=${encodeURIComponent(to)}`;
+          const js = await getJson(url);
+          // 다양한 포맷 방어
+          aggregated = js.stats || js.data || js.byStudent || null;
+        }catch(e){
+          aggregated = null;
+        }
+
+        let byStudent = [];
+
+        if (aggregated && Array.isArray(aggregated)){
+          // 기대 포맷: [{studentId,name,counts:{역량:수}, total}, ...]
+          byStudent = aggregated.map(x=>{
+            const name = x.name || idToName[x.studentId] || x.studentId || '학생';
+            const counts = {};
+            COMPETENCIES.forEach(c=>counts[c]= Number((x.counts && x.counts[c]) || 0));
+            const total = COMPETENCIES.reduce((s,c)=>s+counts[c],0);
+            return { studentId: x.studentId || '', name, counts, total };
+          });
+        } else {
+          // 2) 폴백: 평가 목록을 가져와 클라이언트에서 합산
+          let url = `/api/student/get-evaluations?teacherId=${encodeURIComponent(tid)}`;
+          if (rosterId) url += `&rosterId=${encodeURIComponent(rosterId)}`;
+          if (from) url += `&from=${encodeURIComponent(from)}`;
+          if (to)   url += `&to=${encodeURIComponent(to)}`;
+          const je = await getJson(url);
+          const evals = je.evaluations || je.items || [];
+          // 집계
+          const map = new Map(); // studentId(or name) -> { studentId,name,counts,total }
+          const norm = s => (s||'').toString().trim();
+
+          evals.forEach(ev=>{
+            const list = Array.isArray(ev.peerEvaluations)? ev.peerEvaluations : [];
+            list.forEach(p=>{
+              const comp = p.competency;
+              if (!COMPETENCIES.includes(comp)) return;
+              // nominees 형식(여러 명) / name 단독 형식 모두 지원
+              let targets = [];
+              if (Array.isArray(p.nominees)) targets = p.nominees;
+              else if (p.name) targets = [p.name];
+              targets.forEach(t=>{
+                const sid = norm(t); // 저장 형식에 따라 학번 또는 이름 문자열
+                const displayName = idToName[sid] || sid; // idToName 있으면 이름으로
+                const key = sid; // 키는 학번 문자열 우선
+                if (!map.has(key)){
+                  const counts = {}; COMPETENCIES.forEach(c=>counts[c]=0);
+                  map.set(key, { studentId:sid, name:displayName, counts, total:0 });
+                }
+                const row = map.get(key);
+                row.counts[comp] += 1;
+                row.total += 1;
+              });
+            });
+          });
+
+          byStudent = Array.from(map.values());
+        }
+
+        // 정렬 + 보관
+        byStudent.sort((a,b)=> b.total - a.total || a.name.localeCompare(b.name,'ko'));
+        currentStatsData = byStudent;
+
+        // 렌더: 개인별
+        if (!byStudent.length){
+          resultBox.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">데이터가 없습니다.</div>';
+        }else{
+          resultBox.innerHTML = byStudent.map(st=>{
+            const rows = COMPETENCIES
+              .map(c=>`<div class="competency-stat"><span>${c}</span><strong>${st.counts[c]||0}</strong></div>`)
+              .join('');
+            return `
+              <div class="student-detail">
+                <div class="student-header" onclick="toggleStudentDetail(this)">
+                  <span>${st.name}${st.studentId?` <small style="color:#888">(${st.studentId})</small>`:''}</span>
+                  <span>총 ${st.total} ▼</span>
+                </div>
+                <div class="student-content">
+                  ${rows}
+                </div>
+              </div>`;
+          }).join('');
+        }
+
+        // 렌더: 요약
+        const totalByComp = {}; COMPETENCIES.forEach(c=>totalByComp[c]=0);
+        let totalAll = 0, days = 0; // days는 서버가 주면 쓰고, 없으면 생략
+        byStudent.forEach(st=>{
+          COMPETENCIES.forEach(c=>{ totalByComp[c]+= (st.counts[c]||0); });
+          totalAll += st.total;
+        });
+        const top = COMPETENCIES.slice().sort((a,b)=> totalByComp[b]-totalByComp[a])[0] || '-';
+        const summaryHtml = `
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;">
+            <div class="competency-stat"><span>총 추천 수</span><strong>${totalAll}</strong></div>
+            <div class="competency-stat"><span>가장 많이 받은 역량</span><strong>${top}</strong></div>
+            <div class="competency-stat"><span>학생 수</span><strong>${byStudent.length}</strong></div>
+          </div>
+          ${COMPETENCIES.map(c=>`<div class="competency-stat"><span>${c}</span><strong>${totalByComp[c]}</strong></div>`).join('')}
+        `;
+        summaryBox.innerHTML = summaryHtml;
+
+      }catch(e){
+        console.error(e);
+        showMessage('통계 조회에 실패했습니다: ' + (e.message||'unknown'), 'error');
+        document.getElementById('statisticsResults').innerHTML = '<div style="text-align:center;color:#c53030;padding:20px;">통계 조회 실패</div>';
+        document.getElementById('summaryStats').innerHTML = '<div style="text-align:center;color:#c53030;padding:20px;">통계 조회 실패</div>';
+      }
+    }
+
+    // 엑셀 다운로드
+    function downloadExcel(){
+      if (!currentStatsData || !currentStatsData.length){
+        showMessage('다운로드할 데이터가 없습니다.','error');
+        return;
+      }
+      const rows = currentStatsData.map(st=>{
+        const obj = {
+          학번: st.studentId || '',
+          이름: st.name || ''
+        };
+        COMPETENCIES.forEach(c=> obj[c] = st.counts[c] || 0 );
+        obj['총합'] = st.total || 0;
+        return obj;
+      });
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '개인별 통계');
+      XLSX.writeFile(wb, '에이스_개인별통계.xlsx');
+    }
 
     /* ───────── 공용 UI ───────── */
     function showMessage(msg,type){
@@ -633,7 +792,7 @@
     function clearAllData(){ if(confirm('정말 초기화할까요?')){ localStorage.clear(); showMessage('모든 데이터가 초기화되었습니다.','success'); closeRosterModal(); loadStudentStatus(); } }
     function logout(){ if(confirm('정말로 로그아웃하시겠습니까?')) location.href='login.html'; }
 
-    // 저장된 명부로 통계 드롭다운 채우기
+    // 저장된 명부 → 통계 드롭다운 채우기
     function setSelectOptions(sel, items){
       if (!sel) return;
       const keep = sel.value;
@@ -644,49 +803,16 @@
       if ([...sel.options].some(o=>o.value===keep)) sel.value = keep;
     }
 
-    // 저장된 명부 → 통계용 드롭다운 채우기
-    async function refreshStatsFiltersFromRosters() {
-      const sel = document.getElementById('statsRosterSelect');
-      if (!sel) return; // 통계 페이지가 아닐 수도 있음
-
-      try {
-        const tid = await ensureTeacherId();
-        const { rosters = [] } = await getJson(
-          '/api/admin/list-rosters?teacherId=' + encodeURIComponent(tid)
-        );
-
-        // 보조 함수(이미 admin.html 어딘가 있으면 그걸 써도 됨)
-        const titleOf = (r) =>
-          (r?.categoryName || r?.title || '무제 명부') +
-          (r?.categoryType ? ` · ${r.categoryType}` : '');
-        const countOf = (r) => (r?.itemCount ?? r?.count ?? 0);
-
-        const opts = [
-          '<option value="">전체 명부</option>',
-          ...rosters.map(
-            (r) =>
-              `<option value="${r.id}">${titleOf(r)} (${countOf(r)}명)</option>`
-          ),
-        ];
-        sel.innerHTML = opts.join('');
-      } catch (e) {
-        console.warn('[refreshStatsFiltersFromRosters] fail:', e);
-        // 실패해도 기본 옵션(전체)만 남겨둠
-        document.getElementById('statsRosterSelect').innerHTML =
-          '<option value="">전체 명부</option>';
-      }
-    }
-   
     /* ───────── 초기 로드 ───────── */
     document.addEventListener('DOMContentLoaded', async ()=>{
-      await ensureTeacherId();   // teacherId 먼저 확보
-      await refreshStatsFiltersFromRosters(); // ← 추가!
-      await loadSavedRosters();        // 저장된 명부
-      await loadStudentStatus({ forceEmpty: true }); // ✅ 항상 빈 화면으로 시작
-      loadActivityList();        // 활동목록(기존)
+      await ensureTeacherId();
+      await refreshStatsFiltersFromRosters();       // 명부 드롭다운
+      await loadSavedRosters();                     // 저장된 명부 카드
+      await loadStudentStatus({ forceEmpty: true }); // 현황은 빈 화면에서 시작
+      loadActivityList();                           // 활동 목록 (기존)
     });
 
-    /* 활동 정보(기존) */
+    /* 활동 정보(기존 자리채움) */
     function addActivityInfo(){ /* 기존 구현 */ }
     function loadActivityList(){ /* 기존 구현 */ }
     function removeActivity(id){ /* 기존 구현 */ }
@@ -696,13 +822,3 @@
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
