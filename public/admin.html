@@ -837,25 +837,55 @@
 
 
     // 엑셀 다운로드
+    // 엑셀 다운로드 (요약 + 이유 상세)
     function downloadExcel(){
       if (!currentStatsData || !currentStatsData.length){
         showMessage('다운로드할 데이터가 없습니다.','error');
         return;
       }
-      const rows = currentStatsData.map(st=>{
-        const obj = {
+
+      // 1) 요약 시트 (학생별 역량 카운트)
+      const summaryRows = currentStatsData.map(st=>{
+        const row = {
           학번: st.studentId || '',
           이름: st.name || ''
         };
-        COMPETENCIES.forEach(c=> obj[c] = st.counts[c] || 0 );
-        obj['총합'] = st.total || 0;
-        return obj;
+        COMPETENCIES.forEach(c => {
+          row[c] = (st.totals && st.totals[c]) ? st.totals[c] : 0;
+        });
+        row['총합'] = Object.values(st.totals || {}).reduce((a,b)=>a+(+b||0),0);
+        return row;
       });
-      const ws = XLSX.utils.json_to_sheet(rows);
+      const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+
+      // 2) 이유 상세 시트 (학생/역량/이유/날짜/활동/추천자)
+      const detailRows = [];
+      currentStatsData.forEach(st=>{
+        const reasons = st.reasons || {};
+        COMPETENCIES.forEach(c=>{
+          const list = Array.isArray(reasons[c]) ? reasons[c] : [];
+          list.forEach(r=>{
+            detailRows.push({
+              학번: st.studentId || '',
+              이름: st.name || '',
+              역량: c,
+              이유: (r.text || r.reason || '').toString().trim() || '',
+              날짜: (r.date || '').toString().slice(0,10),
+              활동명: r.activity || '',
+              추천자: r.from || ''
+            });
+          });
+        });
+      });
+      const wsDetail = XLSX.utils.json_to_sheet(detailRows);
+
+      // 통합 워크북
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, '개인별 통계');
-      XLSX.writeFile(wb, '에이스_개인별통계.xlsx');
+      XLSX.utils.book_append_sheet(wb, wsSummary, '개인별 요약');
+      XLSX.utils.book_append_sheet(wb, wsDetail,  '이유 상세');
+      XLSX.writeFile(wb, '에이스_통계.xlsx');
     }
+
 
     /* ───────── 공용 UI ───────── */
     function showMessage(msg,type){
@@ -1031,6 +1061,7 @@
   </script>
 </body>
 </html>
+
 
 
 
