@@ -168,7 +168,7 @@
 
   <script>
     /* ===== 세션 인사 ===== */
-    /* ===== 인사/세션 로드 (whoami + 프로필) ===== */
+    /* ===== 인사/세션 로드 (whoami만 사용) ===== */
     let lastStats = null;
 
     const ss = window.sessionStorage;
@@ -176,36 +176,28 @@
     let studentDisplayName = username;
 
     async function resolveStudentDisplayName() {
-      // 1) 현재 로그인 정보 확인
       try {
         const r = await fetch('/api/auth/whoami', { credentials: 'include', cache: 'no-store' });
         const me = await r.json();
 
-        // 학생이면 프로필에서 진짜 이름을 가져온다
         if (me?.role === 'student') {
-          const uname = me?.username || username;
-          const pr = await fetch(
-            '/api/student/profile?username=' + encodeURIComponent(uname),
-            { credentials: 'include', cache: 'no-store' }
-          );
-          const pj = await pr.json();
-          if (pr.ok && pj?.success && pj?.student) {
-            const nm = pj.student.name || pj.student.studentName || '';
-            if (nm) {
-              // 다음 페이지에서도 쓰도록 캐싱
-              ss.setItem('studentInfo', JSON.stringify({
-                name: nm,
-                studentId: pj.student.studentId || uname
-              }));
-              return nm;
-            }
+          const nm = me.studentName || '';          // whoami가 내려주는 이름
+          const uname = me.username || username;
+          if (nm) {
+            // 다음 페이지에서도 쓰도록 캐싱
+            ss.setItem('studentInfo', JSON.stringify({
+              name: nm,
+              studentId: uname
+            }));
+            return nm;
           }
+          return uname; // 이름이 없으면 아이디
         }
       } catch (e) {
         // 조용히 폴백
       }
 
-      // 2) 세션에 저장된 학생정보가 있으면 사용
+      // 세션에 저장된 학생정보가 있으면 사용
       try {
         const raw = ss.getItem('studentInfo');
         if (raw) {
@@ -214,17 +206,16 @@
         }
       } catch {}
 
-      // 3) 최종 폴백: username
       return username;
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
       studentDisplayName = await resolveStudentDisplayName();
-
       const greet = document.getElementById('greet');
       if (greet) greet.textContent = `${studentDisplayName}님, 안녕하세요!`;
 
       loadCareerInterest();
+
       await fillMyRosters();   // 내 명부 목록 채우기
       await loadMyStats();     // 첫 항목으로 자동 조회
     });
@@ -418,4 +409,5 @@
   </script>
 </body>
 </html>
+
 
