@@ -13,20 +13,20 @@ export default async function handler(req, res) {
       return res.status(405).json({ success: false, error: 'Method Not Allowed' });
     }
 
-    // 세션에서 학생 확인
+    // 세션에서 "학생" 확인
     const me = getUserFromReq?.(req) || null;
     if (!me || me.role !== 'student') {
       return res.status(401).json({ success: false, error: 'STUDENT_SESSION_REQUIRED' });
     }
 
-    // 세션에서 기본 컨텍스트 확보
+    // 기본 컨텍스트
     let teacherId = toStr(me.teacherId || '');
     let rosterId  = toStr(me.rosterId || '');
     let myUid     = toStr(me.uid || '');
     let myName    = toStr(me.name || '');
     let myUsername= toStr(me.username || '');
 
-    // 누락 시 보강: students/{uid} 를 읽어서 teacherId/rosterId/name/username 채우기
+    // 누락 보강
     if (!teacherId || !rosterId || !myName || !myUsername) {
       const sDoc = await db().collection('students').doc(myUid || myUsername).get();
       if (sDoc.exists) {
@@ -38,38 +38,57 @@ export default async function handler(req, res) {
       }
     }
 
+    if (!rosterId) {
+      return res.status(422).json({ success:false, error:'ROSTER_CONTEXT_REQUIRED' });
+    }
+
     // 클라이언트 payload
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const date = toStr(body.date) || new Date().toISOString().slice(0,10);
     const peerEvaluations = Array.isArray(body.peerEvaluations) ? body.peerEvaluations : [];
     const selfEvaluation  = body.selfEvaluation || null;
 
-    // --- 같은 명부(rosterId) 안의 학생 목록을 싹 읽어 이름으로 매핑 ---
-    // 1) 해당 선생님 + 해당 roster 의 학생들만
+    // === 같은 "명부(rosterId)" 안의 학생만 불러와 이름 매핑 인덱스 생성 ===
     const qs = await db()
       .collection('students')
-      .where('teacherId', '==', teacherId)
-      .where('rosterId', '==', rosterId)
+      .where('rosterId','==', rosterId)
       .get();
 
-    // 2) 이름 정규화 인덱스 (동명이인 대비: 배열로 모아둠)
-    const nameIndex = new Map(); // normName -> [ {id, username, studentId, name} ]
+    const byName = new Map();          // normName -> [{id, studentId, username, name}]
+    const duplicates = new Map();      // normName -> [studentIds] (동명이인 감지용)
+
     qs.forEach(d => {
       const s = d.data();
       const key = normName(s.name || '');
       if (!key) return;
-      if (!nameIndex.has(key)) nameIndex.set(key, []);
-      nameIndex.get(key).push({
-        id: d.id,
-        username: toStr(s.username || s.studentId || d.id),
-        studentId: toStr(s.studentId || s.username || d.id),
-        name: toStr(s.name || '')
-      });
+      const entry = { id:d.id, studentId: toStr(s.studentId || d.id), username: toStr(s.username || d.id), name: toStr(s.name || '') };
+      if (!byName.has(key)) byName.set(key, [entry]);
+      else {
+        byName.get(key).push(entry);
+        duplicates.set(key, byName.get(key).map(x=>x.studentId));
+      }
     });
 
-    // 3) 입력된 각 이름을 같은 명부 안에서 해석
+    // 정책 1: 같은 명부에서 동명이인 금지(있으면 거절)
+    if (duplicates.size > 0) {
+      // 입력 값에 실제로 중복 이름이 포함된 경우에만 에러로 리턴
+      const usedKeys = new Set(peerEvaluations.map(p => normName(p?.name)));
+      const hit = [...duplicates.entries()].filter(([k]) => usedKeys.has(k));
+      if (hit.length > 0) {
+        return res.status(422).json({
+          success:false,
+          error:'AMBIGUOUS_NAME_IN_ROSTER',
+          details: hit.map(([k, ids]) => ({ name: k, candidates: ids }))
+        });
+      }
+    }
+
+    // 정책 2: 자기 자신은 추천 불가
+    const myKey = normName(myName);
+
+    // 이름 해석(같은 명부 안에서만)
     const resolvedPeers = [];
-    const unresolved = [];
+    const unknown = [];
 
     for (const item of peerEvaluations) {
       const comp  = toStr(item.competency);
@@ -78,47 +97,38 @@ export default async function handler(req, res) {
 
       if (!input) continue;
 
-      const cand = nameIndex.get(normName(input)) || [];
-      if (cand.length === 1) {
-        const c = cand[0];
+      const key = normName(input);
+
+      if (key === myKey) {
+        return res.status(422).json({ success:false, error:'CANNOT_EVALUATE_SELF', name: input });
+      }
+
+      const list = byName.get(key) || [];
+      if (list.length === 1) {
+        const t = list[0];
         resolvedPeers.push({
           competency: comp,
-          targetName: c.name,
-          targetUsername: c.username,
-          targetStudentId: c.studentId,
-          targetDocId: c.id,
-          reason: why,
-          resolved: true
-        });
-      } else if (cand.length > 1) {
-        // 동명이인: 가장 작은 학번으로 고정 매핑(원하면 정책 변경 가능)
-        const pick = [...cand].sort((a,b)=>a.studentId.localeCompare(b.studentId,'ko'))[0];
-        resolvedPeers.push({
-          competency: comp,
-          targetName: pick.name,
-          targetUsername: pick.username,
-          targetStudentId: pick.studentId,
-          targetDocId: pick.id,
-          reason: why,
-          resolved: true,
-          ambiguous: true,
-          candidates: cand.map(x=>x.studentId)
+          targetName: t.name,
+          targetUsername: t.username,
+          targetStudentId: t.studentId,
+          targetDocId: t.id,
+          reason: why
         });
       } else {
-        unresolved.push({ competency: comp, inputName: input });
-        resolvedPeers.push({
-          competency: comp,
-          targetName: input,   // 원문 보존
-          targetUsername: null,
-          targetStudentId: null,
-          targetDocId: null,
-          reason: why,
-          resolved: false
-        });
+        // 같은 명부 안에서 못 찾음(또는 중복 에러는 위에서 이미 걸러짐)
+        unknown.push(input);
       }
     }
 
-    // --- 저장 형태(샘플: evaluations 컬렉션) ---
+    if (unknown.length > 0) {
+      return res.status(422).json({
+        success:false,
+        error:'NAME_NOT_FOUND_IN_ROSTER',
+        unknown   // 저장하지 않고 입력 보정 유도
+      });
+    }
+
+    // 저장
     const doc = {
       type: 'daily-evaluation',
       date,
@@ -143,8 +153,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       id: ref.id,
-      resolved: resolvedPeers.filter(p=>p.resolved).length,
-      unresolved,                         // 어떤 이름이 매칭 안됐는지 프런트가 알 수 있게 반환
+      saved: resolvedPeers.length + (selfEvaluation ? 1 : 0)
     });
   } catch (e) {
     console.error('[save-evaluation] error', e);
