@@ -134,8 +134,7 @@
         <h3>📈 통계 조회</h3>
         <div class="stats-controls">
           <select id="statsYear"><option value="2024">2024년</option><option value="2025" selected>2025년</option></select>
-          <select id="statsSubject"><option value="">전체 과목</option><option>국어</option><option>수학</option><option>영어</option></select>
-          <select id="statsClub"><option value="">전체 동아리</option><option>코딩클럽</option><option>독서토론</option></select>
+          <select id="statsRosterSelect" style="min-width:180px"><option value="">전체 명부</option></select>
           <div style="display:flex;gap:10px;align-items:center;">
             <input type="date" id="startDate" style="padding:8px;border:2px solid #c77dff;border-radius:8px;">
             <span>~</span>
@@ -645,28 +644,36 @@
       if ([...sel.options].some(o=>o.value===keep)) sel.value = keep;
     }
 
+    // 저장된 명부 → 통계용 드롭다운 채우기
     async function refreshStatsFiltersFromRosters() {
+      const sel = document.getElementById('statsRosterSelect');
+      if (!sel) return; // 통계 페이지가 아닐 수도 있음
+
       try {
         const tid = await ensureTeacherId();
         const { rosters = [] } = await getJson(
           '/api/admin/list-rosters?teacherId=' + encodeURIComponent(tid)
         );
 
-        const subjects = new Set();
-        const clubs    = new Set();
+        // 보조 함수(이미 admin.html 어딘가 있으면 그걸 써도 됨)
+        const titleOf = (r) =>
+          (r?.categoryName || r?.title || '무제 명부') +
+          (r?.categoryType ? ` · ${r.categoryType}` : '');
+        const countOf = (r) => (r?.itemCount ?? r?.count ?? 0);
 
-        rosters.forEach(r => {
-          const type = (r.categoryType || r.type || '').toString().toLowerCase();
-          const name = r.categoryName || r.title || r.name || '';
-          if (!name || name === '무제 명부') return;
-          if (type === 'subject') subjects.add(name);
-         else if (type === 'club') clubs.add(name);
-        });
-
-        setSelectOptions(document.getElementById('statsSubject'), [...subjects]);
-        setSelectOptions(document.getElementById('statsClub'),    [...clubs]);
+        const opts = [
+          '<option value="">전체 명부</option>',
+          ...rosters.map(
+            (r) =>
+              `<option value="${r.id}">${titleOf(r)} (${countOf(r)}명)</option>`
+          ),
+        ];
+        sel.innerHTML = opts.join('');
       } catch (e) {
-        console.warn('통계 필터 갱신 실패:', e);
+        console.warn('[refreshStatsFiltersFromRosters] fail:', e);
+        // 실패해도 기본 옵션(전체)만 남겨둠
+        document.getElementById('statsRosterSelect').innerHTML =
+          '<option value="">전체 명부</option>';
       }
     }
    
@@ -689,6 +696,7 @@
   </script>
 </body>
 </html>
+
 
 
 
