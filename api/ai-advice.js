@@ -2,7 +2,7 @@
 import { db } from './_fb.js';
 import admin from 'firebase-admin';
 import { getUserFromReq } from './_shared/initAdmin.js';
-import { generateAdvice } from './_shared/gemini-advice.js';
+import { getAdviceFromGemini } from './gemini-advice.js';
 
 function toStr(v){ return (v ?? '').toString().trim(); }
 function normalize(s){ return toStr(s).toLowerCase(); }
