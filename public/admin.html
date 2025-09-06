@@ -366,15 +366,23 @@
               await refreshStatsFiltersFromRosters();
 
               if (publish) {
-                // 토글 ON → 방금 토글한 명부를 선택해서 즉시 표시
+                // ON: 방금 토글한 명부를 바로 보여줌
                 SELECTED_ROSTER_ID = thisId;
                 const viewEl = box.querySelector(`.js-view[data-id="${thisId}"]`);
                 SELECTED_ROSTER_TITLE = viewEl?.dataset.title || '';
                 await loadStudentStatus({ rosterId: SELECTED_ROSTER_ID });
               } else {
-                // 토글 OFF → 선택 유지(없으면 빈화면)
-                if (SELECTED_ROSTER_ID) await loadStudentStatus({ rosterId: SELECTED_ROSTER_ID });
-                else await loadStudentStatus({ forceEmpty: true });
+                // OFF: 현재 표시 중인 명부였다면 선택 해제하고 빈 화면
+                if (SELECTED_ROSTER_ID === thisId) {
+                  SELECTED_ROSTER_ID = null;
+                  SELECTED_ROSTER_TITLE = '';
+                  await loadStudentStatus({ forceEmpty: true });
+                } else if (SELECTED_ROSTER_ID) {
+                  // 다른 명부가 선택돼 있었다면 그대로 유지
+                  await loadStudentStatus({ rosterId: SELECTED_ROSTER_ID });
+                } else {
+                  await loadStudentStatus({ forceEmpty: true });
+                }
               }
             } catch (e) {
               alert('노출 설정 실패: ' + (e.message || 'unknown'));
@@ -693,6 +701,7 @@
   </script>
 </body>
 </html>
+
 
 
 
