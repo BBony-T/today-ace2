@@ -627,118 +627,131 @@
       try{
         const tid = await ensureTeacherId();
         const rosterId = (document.getElementById('statsRosterSelect')?.value || '').trim();
-        const from = (document.getElementById('startDate')?.value || '').trim();
-        const to   = (document.getElementById('endDate')?.value || '').trim();
+        const fromStr  = (document.getElementById('startDate')?.value || '').trim();
+        const toStr    = (document.getElementById('endDate')?.value || '').trim();
+        const from = fromStr ? new Date(fromStr) : null;
+        const to   = toStr   ? new Date(toStr)   : null;
 
-        // (선택) 명부 학생 목록 → 학번→이름 매핑
-        let idToName = {};
-        if (rosterId) {
-          try {
+        /* 1) (선택) 명부 학생 목록 → 학번↔이름 매핑 */
+        const idToName = {};
+        const nameToId = {};
+        if (rosterId){
+          try{
             const rid = encodeURIComponent(rosterId);
             const j = await getJson(`/api/admin/list-students?teacherId=${encodeURIComponent(tid)}&rosterId=${rid}&rid=${rid}`);
             const arr = Array.isArray(j.students) ? j.students : [];
-            arr.forEach(s=>{ if(s.studentId) idToName[s.studentId]=s.name || s.studentName || s.username; });
-          } catch(e){}
+            arr.forEach(s=>{
+              if (!s) return;
+              const id = (s.studentId || s.username || '').toString().trim();
+              const nm = (s.name || s.studentName || '').toString().trim();
+              if (id)  idToName[id] = nm || id;
+              if (nm)  nameToId[nm] = id || nm;
+            });
+          }catch(e){ /* 조용히 계속 진행 */ }
         }
+        const rosterIds = new Set(Object.keys(idToName));   // 선택된 명부의 학번 set
+        const rosterNames = new Set(Object.values(idToName).filter(Boolean)); // 이름 set
+  
+        /* 2) 관리자 접근 가능한 루트 엔드포인트로 전체 평가 조회 */
+        //   - 이 프로젝트에는 /api/get-evaluations 가 존재(학생 페이지에서 사용)하므로 이것을 사용
+        const je = await getJson('/api/get-evaluations');
+        const evals = Array.isArray(je.evaluations) ? je.evaluations : (je.items || []);
+  
+        // 날짜 필터 도우미
+        const inRange = (dstr)=>{
+          if (!from && !to) return true;
+          const d = new Date((dstr||'').toString().slice(0,10)); // YYYY-MM-DD 기준
+          if (Number.isNaN(+d)) return true;
+          if (from && d < from) return false;
+          if (to   && d > to)   return false;
+          return true;
+        };
 
-        // 1) 서버 집계 API 우선 시도
-        let aggregated = null;
-        try{
-          let url = `/api/student/get-statistics?teacherId=${encodeURIComponent(tid)}`;
-          if (rosterId) url += `&rosterId=${encodeURIComponent(rosterId)}`;
-          if (from) url += `&from=${encodeURIComponent(from)}`;
-          if (to)   url += `&to=${encodeURIComponent(to)}`;
-          const js = await getJson(url);
-          // 다양한 포맷 방어
-          aggregated = js.stats || js.data || js.byStudent || null;
-        }catch(e){
-          aggregated = null;
-        }
+        /* 3) 집계: 각 평가의 nominees / name을 읽어 역량 카운트
+             - 명부가 선택된 경우: 해당 명부의 학생(학번/이름)에만 집계
+             - 명부 미선택: 전체 대상으로 집계
+        */
+        const map = new Map(); // key: studentId(or 이름), value:{studentId,name,counts,total}
+        const ensureRow = (sid, displayName)=>{
+          const key = sid || displayName;
+          if (!map.has(key)){
+            const counts = {}; COMPETENCIES.forEach(c=>counts[c]=0);
+            map.set(key, { studentId: sid || '', name: displayName || sid || '학생', counts, total: 0 });
+          }
+          return map.get(key);
+        };
 
-        let byStudent = [];
+        evals.forEach(ev=>{
+          if (!inRange(ev.date || ev.timestamp)) return;
 
-        if (aggregated && Array.isArray(aggregated)){
-          // 기대 포맷: [{studentId,name,counts:{역량:수}, total}, ...]
-          byStudent = aggregated.map(x=>{
-            const name = x.name || idToName[x.studentId] || x.studentId || '학생';
-            const counts = {};
-            COMPETENCIES.forEach(c=>counts[c]= Number((x.counts && x.counts[c]) || 0));
-            const total = COMPETENCIES.reduce((s,c)=>s+counts[c],0);
-            return { studentId: x.studentId || '', name, counts, total };
-          });
-        } else {
-          // 2) 폴백: 평가 목록을 가져와 클라이언트에서 합산
-          let url = `/api/student/get-evaluations?teacherId=${encodeURIComponent(tid)}`;
-          if (rosterId) url += `&rosterId=${encodeURIComponent(rosterId)}`;
-          if (from) url += `&from=${encodeURIComponent(from)}`;
-          if (to)   url += `&to=${encodeURIComponent(to)}`;
-          const je = await getJson(url);
-          const evals = je.evaluations || je.items || [];
-          // 집계
-          const map = new Map(); // studentId(or name) -> { studentId,name,counts,total }
-          const norm = s => (s||'').toString().trim();
+          const peer = Array.isArray(ev.peerEvaluations) ? ev.peerEvaluations : [];
+          peer.forEach(p=>{
+            const comp = p.competency;
+            if (!COMPETENCIES.includes(comp)) return;
 
-          evals.forEach(ev=>{
-            const list = Array.isArray(ev.peerEvaluations)? ev.peerEvaluations : [];
-            list.forEach(p=>{
-              const comp = p.competency;
-              if (!COMPETENCIES.includes(comp)) return;
-              // nominees 형식(여러 명) / name 단독 형식 모두 지원
-              let targets = [];
-              if (Array.isArray(p.nominees)) targets = p.nominees;
-              else if (p.name) targets = [p.name];
-              targets.forEach(t=>{
-                const sid = norm(t); // 저장 형식에 따라 학번 또는 이름 문자열
-                const displayName = idToName[sid] || sid; // idToName 있으면 이름으로
-                const key = sid; // 키는 학번 문자열 우선
-                if (!map.has(key)){
-                  const counts = {}; COMPETENCIES.forEach(c=>counts[c]=0);
-                  map.set(key, { studentId:sid, name:displayName, counts, total:0 });
-                }
-                const row = map.get(key);
-                row.counts[comp] += 1;
-                row.total += 1;
-              });
+            // nominees(배열) 또는 name(단일)을 모두 지원
+            let targets = [];
+            if (Array.isArray(p.nominees)) targets = p.nominees;
+            else if (p.name) targets = [p.name];
+
+            targets.forEach(raw=>{
+              const t = (raw||'').toString().trim();
+              // ① 먼저 학번 일치로 시도
+              let sid = t;
+              let nm  = idToName[t] || '';
+
+              // ② 학번 매핑이 없고 이름이 명부에 있으면 이름→학번 변환
+              if (!nm && nameToId[t]) { sid = nameToId[t]; nm = idToName[sid] || t; }
+
+              // 명부 필터: 선택된 명부가 있으면 set에 포함될 때만 집계
+              if (rosterId){
+                const okById   = rosterIds.has(sid);
+                const okByName = rosterNames.has(t);
+                if (!okById && !okByName) return;
+              }
+
+              const row = ensureRow(sid, nm || t);
+              row.counts[comp] += 1;
+              row.total += 1;
             });
           });
+        });
 
-          byStudent = Array.from(map.values());
-        }
-
-        // 정렬 + 보관
-        byStudent.sort((a,b)=> b.total - a.total || a.name.localeCompare(b.name,'ko'));
+        const byStudent = Array.from(map.values()).sort(
+          (a,b)=> b.total - a.total || a.name.localeCompare(b.name,'ko')
+        );
         currentStatsData = byStudent;
 
-        // 렌더: 개인별
-        if (!byStudent.length){
-          resultBox.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">데이터가 없습니다.</div>';
-        }else{
-          resultBox.innerHTML = byStudent.map(st=>{
-            const rows = COMPETENCIES
-              .map(c=>`<div class="competency-stat"><span>${c}</span><strong>${st.counts[c]||0}</strong></div>`)
-              .join('');
-            return `
-              <div class="student-detail">
-                <div class="student-header" onclick="toggleStudentDetail(this)">
-                  <span>${st.name}${st.studentId?` <small style="color:#888">(${st.studentId})</small>`:''}</span>
-                  <span>총 ${st.total} ▼</span>
-                </div>
-                <div class="student-content">
-                  ${rows}
-                </div>
-              </div>`;
-          }).join('');
-        }
+        /* 4) 렌더링 */
+        const resultBoxHtml = byStudent.length
+          ? byStudent.map(st=>{
+              const rows = COMPETENCIES
+                .map(c=>`<div class="competency-stat"><span>${c}</span><strong>${st.counts[c]||0}</strong></div>`)
+                .join('');
+              return `
+                <div class="student-detail">
+                  <div class="student-header" onclick="toggleStudentDetail(this)">
+                    <span>${st.name}${st.studentId?` <small style="color:#888">(${st.studentId})</small>`:''}</span>
+                    <span>총 ${st.total} ▼</span>
+                  </div>
+                  <div class="student-content">
+                    ${rows}
+                  </div>
+                </div>`;
+            }).join('')
+          : '<div style="text-align:center;color:#666;padding:20px;">데이터가 없습니다.</div>';
+        resultBox.innerHTML = resultBoxHtml;
 
-        // 렌더: 요약
+        // 전체 요약
         const totalByComp = {}; COMPETENCIES.forEach(c=>totalByComp[c]=0);
-        let totalAll = 0, days = 0; // days는 서버가 주면 쓰고, 없으면 생략
+        let totalAll = 0;
         byStudent.forEach(st=>{
-          COMPETENCIES.forEach(c=>{ totalByComp[c]+= (st.counts[c]||0); });
+          COMPETENCIES.forEach(c=> totalByComp[c] += (st.counts[c]||0));
           totalAll += st.total;
         });
         const top = COMPETENCIES.slice().sort((a,b)=> totalByComp[b]-totalByComp[a])[0] || '-';
-        const summaryHtml = `
+
+        summaryBox.innerHTML = `
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;">
             <div class="competency-stat"><span>총 추천 수</span><strong>${totalAll}</strong></div>
             <div class="competency-stat"><span>가장 많이 받은 역량</span><strong>${top}</strong></div>
@@ -746,13 +759,13 @@
           </div>
           ${COMPETENCIES.map(c=>`<div class="competency-stat"><span>${c}</span><strong>${totalByComp[c]}</strong></div>`).join('')}
         `;
-        summaryBox.innerHTML = summaryHtml;
-
       }catch(e){
         console.error(e);
         showMessage('통계 조회에 실패했습니다: ' + (e.message||'unknown'), 'error');
-        document.getElementById('statisticsResults').innerHTML = '<div style="text-align:center;color:#c53030;padding:20px;">통계 조회 실패</div>';
-        document.getElementById('summaryStats').innerHTML = '<div style="text-align:center;color:#c53030;padding:20px;">통계 조회 실패</div>';
+        document.getElementById('statisticsResults').innerHTML =
+          '<div style="text-align:center;color:#c53030;padding:20px;">통계 조회 실패</div>';
+        document.getElementById('summaryStats').innerHTML =
+          '<div style="text-align:center;color:#c53030;padding:20px;">통계 조회 실패</div>';
       }
     }
 
@@ -822,3 +835,4 @@
   </script>
 </body>
 </html>
+
