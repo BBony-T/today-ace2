@@ -1,635 +1,336 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>오늘의 에이스는? - 학생 페이지</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #fff8f0;
-            min-height: 100vh;
-            display: flex;
-        }
-
-        /* 좌측 사이드바 */
-        .sidebar {
-            width: 200px;
-            background-color: white;
-            border-right: 3px solid #ffe0b3;
-            padding: 20px;
-            box-shadow: 3px 0 10px rgba(255, 217, 61, 0.1);
-        }
-
-        .sidebar-header {
-            text-align: center;
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #fff5e6;
-        }
-
-        .sidebar-header h2 {
-            color: #2d3748;
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .sidebar-header p {
-            color: #4a5568;
-            font-size: 11px;
-        }
-
-        .menu-item {
-            display: block;
-            width: 100%;
-            padding: 12px 15px;
-            margin-bottom: 8px;
-            background-color: #fff5e6;
-            border: 2px solid #ffe0b3;
-            border-radius: 10px;
-            color: #2d3748;
-            text-decoration: none;
-            font-weight: 600;
-            text-align: center;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .menu-item.active {
-            background-color: #ffd93d;
-        }
-
-        .menu-item:hover {
-            background-color: #ffd93d;
-            transform: translateY(-1px);
-        }
-
-        .logout-btn {
-            margin-top: 20px;
-            padding: 8px 12px;
-            background-color: #ffb3b3;
-            border: 2px solid #ff9999;
-            border-radius: 8px;
-            color: #2d3748;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            font-size: 11px;
-        }
-
-        .logout-btn:hover {
-            background-color: #ff9999;
-        }
-
-        /* 메인 콘텐츠 */
-        .main-content {
-            flex: 1;
-            padding: 25px;
-            overflow-y: auto;
-        }
-
-        .page-header {
-            text-align: center;
-            margin-bottom: 25px;
-        }
-
-        .page-header h1 {
-            color: #2d3748;
-            font-size: 26px;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-
-        .page-header p {
-            color: #4a5568;
-            font-size: 15px;
-        }
-
-        /* 동료평가 섹션 */
-        .peer-section {
-            background-color: #fffbf5;
-            border: 3px solid #ffe0b3;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 25px;
-        }
-
-        .section-title {
-            color: #2d3748;
-            font-size: 18px;
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 8px;
-        }
-
-        .section-description {
-            color: #666;
-            font-size: 12px;
-            text-align: center;
-            margin-bottom: 20px;
-            line-height: 1.4;
-        }
-
-        /* 3x2 그리드 - 확실한 배치 */
-        .peer-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            grid-template-rows: auto auto;
-            gap: 15px;
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        .peer-item {
-            background-color: white;
-            border: 2px solid #ffd93d;
-            border-radius: 10px;
-            padding: 15px;
-            height: 140px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .peer-label {
-            color: #2d3748;
-            font-size: 13px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            text-align: center;
-            flex-shrink: 0;
-        }
-
-        .peer-input {
-            width: 100%;
-            padding: 8px 10px;
-            border: 2px solid #ffd93d;
-            border-radius: 6px;
-            font-size: 13px;
-            margin-bottom: 6px;
-            background-color: white;
-            flex-shrink: 0;
-        }
-
-        .peer-input:focus {
-            outline: none;
-            border-color: #ffb700;
-            box-shadow: 0 0 0 2px rgba(255, 217, 61, 0.2);
-        }
-
-        .peer-reason {
-            width: 100%;
-            padding: 8px 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
-            font-size: 12px;
-            background-color: #fafafa;
-            flex: 1;
-            resize: none;
-            display: none;
-        }
-
-        .peer-reason.visible {
-            display: block;
-        }
-
-        .peer-reason:focus {
-            outline: none;
-            border-color: #c77dff;
-            background-color: white;
-        }
-
-        /* 자기평가 섹션 */
-        .self-section {
-            background-color: #faf7ff;
-            border: 3px solid #e0c4ff;
-            border-radius: 15px;
-            padding: 25px;
-        }
-
-        .self-title {
-            color: #2d3748;
-            font-size: 16px;
-            font-weight: 600;
-            text-align: center;
-            margin-bottom: 18px;
-        }
-
-        .self-options {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-bottom: 20px;
-            max-width: 700px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .self-option {
-            position: relative;
-        }
-
-        .self-option input[type="radio"] {
-            display: none;
-        }
-
-        .self-option label {
-            display: block;
-            padding: 12px 8px;
-            background-color: #f8f0ff;
-            border: 2px solid #e0c4ff;
-            border-radius: 10px;
-            color: #2d3748;
-            font-weight: 500;
-            cursor: pointer;
-            text-align: center;
-            font-size: 12px;
-            transition: all 0.2s ease;
-        }
-
-        .self-option input[type="radio"]:checked + label {
-            background-color: #c77dff;
-            color: white;
-            transform: scale(1.02);
-        }
-
-        .self-option label:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 3px 8px rgba(199, 125, 255, 0.2);
-        }
-
-        .self-reason {
-            width: 100%;
-            max-width: 700px;
-            margin: 0 auto;
-            display: block;
-            padding: 12px;
-            border: 2px solid #c77dff;
-            border-radius: 10px;
-            font-size: 13px;
-            min-height: 60px;
-            resize: vertical;
-            background-color: white;
-        }
-
-        .self-reason:focus {
-            outline: none;
-            border-color: #a855f7;
-            box-shadow: 0 0 0 2px rgba(199, 125, 255, 0.2);
-        }
-
-        /* 저장 버튼 */
-        .save-section {
-            text-align: center;
-            margin-top: 25px;
-        }
-
-        .save-button {
-            background-color: #ffd93d;
-            color: #2d3748;
-            border: none;
-            padding: 15px 35px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .save-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(255, 217, 61, 0.4);
-            background-color: #ffb700;
-        }
-
-        /* 반응형 */
-        @media (max-width: 1000px) {
-            .peer-grid {
-                grid-template-columns: 1fr 1fr;
-                grid-template-rows: auto auto auto;
-            }
-        }
-
-        @media (max-width: 768px) {
-            body {
-                flex-direction: column;
-            }
-            
-            .sidebar {
-                width: 100%;
-                padding: 15px;
-            }
-            
-            .main-content {
-                padding: 20px;
-            }
-            
-            .peer-grid {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto;
-            }
-            
-            .self-options {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        @media (max-width: 480px) {
-            .self-options {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>오늘의 에이스는? - 학생 페이지</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Arial',sans-serif;background-color:#fff8f0;min-height:100vh;display:flex}
+    /* 좌측 사이드바 */
+    .sidebar{width:200px;background:#fff;border-right:3px solid #ffe0b3;padding:20px;box-shadow:3px 0 10px rgba(255,217,61,.1)}
+    .sidebar-header{text-align:center;margin-bottom:25px;padding-bottom:15px;border-bottom:2px solid #fff5e6}
+    .sidebar-header h2{color:#2d3748;font-size:16px;font-weight:700;margin-bottom:5px}
+    .sidebar-header p{color:#4a5568;font-size:11px}
+    .menu-item{display:block;width:100%;padding:12px 15px;margin-bottom:8px;background:#fff5e6;border:2px solid #ffe0b3;border-radius:10px;color:#2d3748;text-decoration:none;font-weight:600;text-align:center;font-size:12px;cursor:pointer;transition:.2s}
+    .menu-item.active{background:#ffd93d}
+    .menu-item:hover{background:#ffd93d;transform:translateY(-1px)}
+    .logout-btn{margin-top:20px;padding:8px 12px;background:#ffb3b3;border:2px solid #ff9999;border-radius:8px;color:#2d3748;font-weight:600;cursor:pointer;width:100%;font-size:11px}
+    .logout-btn:hover{background:#ff9999}
+    /* 메인 콘텐츠 */
+    .main-content{flex:1;padding:25px;overflow-y:auto}
+    .page-header{text-align:center;margin-bottom:25px}
+    .page-header h1{color:#2d3748;font-size:26px;font-weight:700;margin-bottom:8px}
+    .page-header p{color:#4a5568;font-size:15px}
+    /* 동료평가 */
+    .peer-section{background:#fffbf5;border:3px solid #ffe0b3;border-radius:15px;padding:25px;margin-bottom:25px}
+    .section-title{color:#2d3748;font-size:18px;font-weight:700;text-align:center;margin-bottom:8px}
+    .section-description{color:#666;font-size:12px;text-align:center;margin-bottom:20px;line-height:1.4}
+    .peer-grid{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto;gap:15px;max-width:900px;margin:0 auto}
+    .peer-item{background:#fff;border:2px solid #ffd93d;border-radius:10px;padding:15px;height:140px;display:flex;flex-direction:column}
+    .peer-label{color:#2d3748;font-size:13px;font-weight:600;margin-bottom:8px;text-align:center;flex-shrink:0}
+    .peer-input{width:100%;padding:8px 10px;border:2px solid #ffd93d;border-radius:6px;font-size:13px;margin-bottom:6px;background:#fff;flex-shrink:0}
+    .peer-input:focus{outline:none;border-color:#ffb700;box-shadow:0 0 0 2px rgba(255,217,61,.2)}
+    .peer-reason{width:100%;padding:8px 10px;border:2px solid #e0e0e0;border-radius:6px;font-size:12px;background:#fafafa;flex:1;resize:none;display:none}
+    .peer-reason.visible{display:block}
+    .peer-reason:focus{outline:none;border-color:#c77dff;background:#fff}
+    /* 자기평가 */
+    .self-section{background:#faf7ff;border:3px solid #e0c4ff;border-radius:15px;padding:25px}
+    .self-title{color:#2d3748;font-size:16px;font-weight:600;text-align:center;margin-bottom:18px}
+    .self-options{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;max-width:700px;margin-left:auto;margin-right:auto}
+    .self-option{position:relative}
+    .self-option input[type=radio]{display:none}
+    .self-option label{display:block;padding:12px 8px;background:#f8f0ff;border:2px solid #e0c4ff;border-radius:10px;color:#2d3748;font-weight:500;cursor:pointer;text-align:center;font-size:12px;transition:.2s}
+    .self-option input[type=radio]:checked+label{background:#c77dff;color:#fff;transform:scale(1.02)}
+    .self-option label:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(199,125,255,.2)}
+    .self-reason{width:100%;max-width:700px;margin:0 auto;display:block;padding:12px;border:2px solid #c77dff;border-radius:10px;font-size:13px;min-height:60px;resize:vertical;background:#fff}
+    .self-reason:focus{outline:none;border-color:#a855f7;box-shadow:0 0 0 2px rgba(199,125,255,.2)}
+    /* 저장 버튼 */
+    .save-section{text-align:center;margin-top:25px}
+    .save-button{background:#ffd93d;color:#2d3748;border:none;padding:15px 35px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;transition:.3s}
+    .save-button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(255,217,61,.4);background:#ffb700}
+    /* 반응형 */
+    @media (max-width:1000px){.peer-grid{grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto}}
+    @media (max-width:768px){
+      body{flex-direction:column}
+      .sidebar{width:100%;padding:15px}
+      .main-content{padding:20px}
+      .peer-grid{grid-template-columns:1fr;grid-template-rows:auto}
+      .self-options{grid-template-columns:repeat(2,1fr)}
+    }
+    @media (max-width:480px){.self-options{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
-    <!-- 좌측 사이드바 -->
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <h2>🌟 학생 메뉴</h2>
-            <p id="greet">안녕하세요!</p>
-        </div>
-        
-        <button class="menu-item active" onclick="showInputPage()">📝 입력 페이지</button>
-        <button class="menu-item" onclick="showStatsPage()">📊 통계 페이지</button>
-        <button class="logout-btn" onclick="logout()">🚪 로그아웃</button>
+  <!-- 좌측 사이드바 -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>🌟 학생 메뉴</h2>
+      <p id="greet">안녕하세요!</p>
     </div>
 
-    <!-- 메인 콘텐츠 -->
-    <div class="main-content">
-        <div class="page-header">
-            <h1>🌟 오늘의 에이스는?</h1>
-            <p>친구들과 나 자신을 따뜻한 마음으로 평가해보세요</p>
-        </div>
+    <button class="menu-item active" onclick="showInputPage(this)">📝 입력 페이지</button>
+    <button class="menu-item" onclick="showStatsPage(this)">📊 통계 페이지</button>
+    <button class="logout-btn" onclick="logout()">🚪 로그아웃</button>
+  </div>
 
-        <!-- 동료평가 섹션 -->
-        <div class="peer-section">
-            <h3 class="section-title">👥 동료 평가</h3>
-            <p class="section-description">다음 에이스에 가장 가깝다고 생각하는 팀원을 뽑아주세요.<br>
-            (팀원 모두를 입력해야 합니다. 각 에이스당 한 명만 추천합니다, 자기는 제외합니다)</p>
-            
-            <div class="peer-grid">
-                <div class="peer-item">
-                    <div class="peer-label">🦁 자신감과 리더십</div>
-                    <input type="text" class="peer-input" placeholder="친구 이름" 
-                           onInput="toggleReason(this, 'reason1')">
-                    <textarea class="peer-reason" id="reason1" placeholder="어떤 면에서?"></textarea>
-                </div>
-                
-                <div class="peer-item">
-                    <div class="peer-label">🔍 분석</div>
-                    <input type="text" class="peer-input" placeholder="친구 이름"
-                           onInput="toggleReason(this, 'reason2')">
-                    <textarea class="peer-reason" id="reason2" placeholder="어떤 면에서?"></textarea>
-                </div>
-                
-                <div class="peer-item">
-                    <div class="peer-label">💡 아이디어 뱅크</div>
-                    <input type="text" class="peer-input" placeholder="친구 이름"
-                           onInput="toggleReason(this, 'reason3')">
-                    <textarea class="peer-reason" id="reason3" placeholder="어떤 면에서?"></textarea>
-                </div>
-                
-                <div class="peer-item">
-                    <div class="peer-label">💖 감정 이해</div>
-                    <input type="text" class="peer-input" placeholder="친구 이름"
-                           onInput="toggleReason(this, 'reason4')">
-                    <textarea class="peer-reason" id="reason4" placeholder="어떤 면에서?"></textarea>
-                </div>
-                
-                <div class="peer-item">
-                    <div class="peer-label">💬 의사소통</div>
-                    <input type="text" class="peer-input" placeholder="친구 이름"
-                           onInput="toggleReason(this, 'reason5')">
-                    <textarea class="peer-reason" id="reason5" placeholder="어떤 면에서?"></textarea>
-                </div>
-                
-                <div class="peer-item">
-                    <div class="peer-label">🤝 협동심</div>
-                    <input type="text" class="peer-input" placeholder="친구 이름"
-                           onInput="toggleReason(this, 'reason6')">
-                    <textarea class="peer-reason" id="reason6" placeholder="어떤 면에서?"></textarea>
-                </div>
-            </div>
-        </div>
-
-        <!-- 자기평가 섹션 -->
-        <div class="self-section">
-            <h3 class="section-title">🌟 자기 평가</h3>
-            <p class="section-description">오늘 나는 어떤 에이스였는지 클릭 후 그 이유를 적어주세요.</p>
-            
-            <div class="self-title">나는 오늘 <strong>____</strong> 에이스다!</div>
-            
-            <div class="self-options">
-                <div class="self-option">
-                    <input type="radio" id="self1" name="self-competency" value="자신감과 리더십">
-                    <label for="self1">🦁 자신감과 리더십</label>
-                </div>
-                <div class="self-option">
-                    <input type="radio" id="self2" name="self-competency" value="분석">
-                    <label for="self2">🔍 분석</label>
-                </div>
-                <div class="self-option">
-                    <input type="radio" id="self3" name="self-competency" value="아이디어 뱅크">
-                    <label for="self3">💡 아이디어 뱅크</label>
-                </div>
-                <div class="self-option">
-                    <input type="radio" id="self4" name="self-competency" value="감정 이해">
-                    <label for="self4">💖 감정 이해</label>
-                </div>
-                <div class="self-option">
-                    <input type="radio" id="self5" name="self-competency" value="의사소통">
-                    <label for="self5">💬 의사소통</label>
-                </div>
-                <div class="self-option">
-                    <input type="radio" id="self6" name="self-competency" value="협동심">
-                    <label for="self6">🤝 협동심</label>
-                </div>
-            </div>
-
-            <textarea class="self-reason" id="self-reason" 
-                     placeholder="왜 그렇게 생각하는지 이유를 적어주세요..."></textarea>
-        </div>
-
-        <!-- 저장 버튼 -->
-        <div class="save-section">
-            <button class="save-button" onclick="saveData()">💾 저장하기</button>
-            <div id="message" style="margin-top: 15px; color: #2d3748; font-weight: 600;"></div>
-        </div>
+  <!-- 메인 콘텐츠 -->
+  <div class="main-content">
+    <div class="page-header">
+      <h1>🌟 오늘의 에이스는?</h1>
+      <p>친구들과 나 자신을 따뜻한 마음으로 평가해보세요</p>
     </div>
 
-    <script>
-      // ===== 로그인 정보 로드 & 인사 =====
-      const ss = window.sessionStorage;
-      const username = ss.getItem('username') || 'student1';
-      let studentDisplayName = username;
+    <!-- 동료평가 섹션 -->
+    <div class="peer-section">
+      <h3 class="section-title">👥 동료 평가</h3>
+      <p class="section-description">다음 에이스에 가장 가깝다고 생각하는 팀원을 뽑아주세요.<br>(팀원 모두를 입력해야 합니다. 각 에이스당 한 명만 추천합니다, 자기는 제외합니다)</p>
 
-      try {
-        const infoRaw = ss.getItem('studentInfo');
-        if (infoRaw) {
-          const info = typeof infoRaw === 'string' ? JSON.parse(infoRaw) : infoRaw;
-          if (info && (info.name || info.studentName)) {
-            studentDisplayName = info.name || info.studentName;
+      <div class="peer-grid">
+        <div class="peer-item">
+          <div class="peer-label">🦁 자신감과 리더십</div>
+          <input type="text" class="peer-input" placeholder="친구 이름" oninput="toggleReason(this,'reason1')">
+          <textarea class="peer-reason" id="reason1" placeholder="어떤 면에서?"></textarea>
+        </div>
+
+        <div class="peer-item">
+          <div class="peer-label">🔍 분석</div>
+          <input type="text" class="peer-input" placeholder="친구 이름" oninput="toggleReason(this,'reason2')">
+          <textarea class="peer-reason" id="reason2" placeholder="어떤 면에서?"></textarea>
+        </div>
+
+        <div class="peer-item">
+          <div class="peer-label">💡 아이디어 뱅크</div>
+          <input type="text" class="peer-input" placeholder="친구 이름" oninput="toggleReason(this,'reason3')">
+          <textarea class="peer-reason" id="reason3" placeholder="어떤 면에서?"></textarea>
+        </div>
+
+        <div class="peer-item">
+          <div class="peer-label">💖 감정 이해</div>
+          <input type="text" class="peer-input" placeholder="친구 이름" oninput="toggleReason(this,'reason4')">
+          <textarea class="peer-reason" id="reason4" placeholder="어떤 면에서?"></textarea>
+        </div>
+
+        <div class="peer-item">
+          <div class="peer-label">💬 의사소통</div>
+          <input type="text" class="peer-input" placeholder="친구 이름" oninput="toggleReason(this,'reason5')">
+          <textarea class="peer-reason" id="reason5" placeholder="어떤 면에서?"></textarea>
+        </div>
+
+        <div class="peer-item">
+          <div class="peer-label">🤝 협동심</div>
+          <input type="text" class="peer-input" placeholder="친구 이름" oninput="toggleReason(this,'reason6')">
+          <textarea class="peer-reason" id="reason6" placeholder="어떤 면에서?"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- 자기평가 섹션 -->
+    <div class="self-section">
+      <h3 class="section-title">🌟 자기 평가</h3>
+      <p class="section-description">오늘 나는 어떤 에이스였는지 클릭 후 그 이유를 적어주세요.</p>
+
+      <div class="self-title">나는 오늘 <strong>____</strong> 에이스다!</div>
+
+      <div class="self-options">
+        <div class="self-option">
+          <input type="radio" id="self1" name="self-competency" value="자신감과 리더십">
+          <label for="self1">🦁 자신감과 리더십</label>
+        </div>
+        <div class="self-option">
+          <input type="radio" id="self2" name="self-competency" value="분석">
+          <label for="self2">🔍 분석</label>
+        </div>
+        <div class="self-option">
+          <input type="radio" id="self3" name="self-competency" value="아이디어 뱅크">
+          <label for="self3">💡 아이디어 뱅크</label>
+        </div>
+        <div class="self-option">
+          <input type="radio" id="self4" name="self-competency" value="감정 이해">
+          <label for="self4">💖 감정 이해</label>
+        </div>
+        <div class="self-option">
+          <input type="radio" id="self5" name="self-competency" value="의사소통">
+          <label for="self5">💬 의사소통</label>
+        </div>
+        <div class="self-option">
+          <input type="radio" id="self6" name="self-competency" value="협동심">
+          <label for="self6">🤝 협동심</label>
+        </div>
+      </div>
+
+      <textarea class="self-reason" id="self-reason" placeholder="왜 그렇게 생각하는지 이유를 적어주세요..."></textarea>
+    </div>
+
+    <!-- 저장 버튼 -->
+    <div class="save-section">
+      <button class="save-button" onclick="saveData()">💾 저장하기</button>
+      <div id="message" style="margin-top:15px;color:#2d3748;font-weight:600;"></div>
+    </div>
+  </div>
+
+  <script>
+    // ====== 로그인 정보 로드 & 인사 ======
+    const ss = window.sessionStorage;
+    let CURRENT = { username: '', name: '' };
+
+    async function loadStudentIdentity(){
+      // 1) 세션 스토리지 힌트 사용(로그인 직후 저장해둔 값)
+      const hintName = ss.getItem('studentName') || '';
+      const hintUser = ss.getItem('studentUsername') || ss.getItem('username') || '';
+      CURRENT.name = hintName || '';
+      CURRENT.username = hintUser || '';
+
+      // 2) 서버 세션 확인
+      try{
+        const r = await fetch('/api/auth/whoami', { credentials:'include', cache:'no-store' });
+        if (r.ok) {
+          const j = await r.json();
+          if (j && j.role === 'student') {
+            CURRENT.name = j.name || CURRENT.name || '';
+            CURRENT.username = j.username || CURRENT.username || '';
           }
         }
-      } catch (e) {}
+      }catch(_){}
 
-      document.addEventListener('DOMContentLoaded', () => {
-       const greet = document.getElementById('greet');
-        if (greet) greet.textContent = `${studentDisplayName}님, 안녕하세요!`;
-      });
+      // 3) UI 적용
+      const greet = document.getElementById('greet');
+      if (greet) greet.textContent = `${(CURRENT.name || CURRENT.username || '학생')}님, 안녕하세요!`;
+    }
 
-      // ===== UI 유틸 =====
-      function toggleReason(input, reasonId) {
-        const reason = document.getElementById(reasonId);
-        if (input.value.trim() !== '') {
-          reason.classList.add('visible');
-          reason.style.display = 'block';
-        } else {
-          reason.classList.remove('visible');
-          reason.style.display = 'none';
-          reason.value = '';
+    document.addEventListener('DOMContentLoaded', loadStudentIdentity);
+
+    // ===== UI 유틸 =====
+    function toggleReason(input, reasonId){
+      const reason = document.getElementById(reasonId);
+      if (input.value.trim() !== '') {
+        reason.classList.add('visible');
+        reason.style.display = 'block';
+      } else {
+        reason.classList.remove('visible');
+        reason.style.display = 'none';
+        reason.value = '';
+      }
+    }
+
+    function showInputPage(el){
+      document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
+      if (el) el.classList.add('active');
+      document.getElementById('message').textContent = '입력 페이지가 활성화되었습니다.';
+    }
+
+    function showStatsPage(el){
+      document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
+      if (el) el.classList.add('active');
+      window.location.href = 'student-stats.html';
+    }
+
+    function logout(){
+      if (confirm('정말로 로그아웃하시겠습니까?')) {
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+      }
+    }
+
+    // ===== 저장 로직 (서버 → 실패 시 로컬 폴백) =====
+    async function saveData(){
+      const msg = document.getElementById('message');
+      msg.style.color = '#2d3748';
+      msg.textContent = '저장 중…';
+
+      // 1) 동료평가 수집
+      const peerData = [];
+      for (let i=1;i<=6;i++){
+        const item = document.querySelector(`.peer-item:nth-child(${i})`);
+        if (!item) continue;
+        const label = item.querySelector('.peer-label')?.textContent || '';
+        const name  = item.querySelector('.peer-input')?.value.trim() || '';
+        const reason= document.getElementById(`reason${i}`)?.value.trim() || '';
+        if (name){
+          peerData.push({
+            competency: label.replace(/[🦁🔍💡💖💬🤝]/g,'').trim(),
+            name, reason
+          });
         }
       }
 
-      function showInputPage() {
-        document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
-        event.target.classList.add('active');
-        document.getElementById('message').textContent = '입력 페이지가 활성화되었습니다.';
-      }
-
-      function showStatsPage() {
-        document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
-        event.target.classList.add('active');
-        // 통계 페이지로 이동
-        window.location.href = 'student-stats.html';
-      }
-
-      function logout() {
-        if (confirm('정말로 로그아웃하시겠습니까?')) {
-          sessionStorage.clear();
-          window.location.href = 'index.html';
-        }
-      }
-
-      // ===== 저장 로직 (서버 → 실패 시 로컬 폴백) =====
-      async function saveData() {
-        const msg = document.getElementById('message');
-        msg.style.color = '#2d3748';
-        msg.textContent = '저장 중…';
-
-        // 1) 동료평가 수집 (라벨에서 역량명 추출)
-        const peerData = [];
-        for (let i = 1; i <= 6; i++) {
-          const item = document.querySelector(`.peer-item:nth-child(${i})`);
-          if (!item) continue;
-          const label = item.querySelector('.peer-label')?.textContent || '';
-          const name = item.querySelector('.peer-input')?.value.trim() || '';
-          const reason = document.getElementById(`reason${i}`)?.value.trim() || '';
-     
-          if (name) {
-            peerData.push({
-              competency: label.replace(/[🦁🔍💡💖💬🤝]/g, '').trim(),
-              name,
-              reason
-            });
-          }
-        }
-    
-        // 2) 자기평가 수집
-        const selfRadio = document.querySelector('input[name="self-competency"]:checked');
-        const selfReason = document.getElementById('self-reason').value.trim();
-        let selfEvaluation = null;
-
-        if (selfRadio) {
-          if (!selfReason) {
-            msg.style.color = '#c53030';
-            msg.textContent = '자기평가 이유를 작성해주세요!';
-            return;
-          }
-          selfEvaluation = {
-            competency: selfRadio.value,
-            reason: selfReason
-          };
-        }
-
-        // 3) 최소 입력 검증
-        if (peerData.length === 0 && !selfEvaluation) {
+      // 2) 자기평가 수집
+      const selfRadio  = document.querySelector('input[name="self-competency"]:checked');
+      const selfReason = document.getElementById('self-reason').value.trim();
+      let selfEvaluation = null;
+      if (selfRadio){
+        if (!selfReason){
           msg.style.color = '#c53030';
-          msg.textContent = '동료평가나 자기평가 중 하나는 반드시 입력해주세요!';
+          msg.textContent = '자기평가 이유를 작성해주세요!';
           return;
         }
+        selfEvaluation = { competency: selfRadio.value, reason: selfReason };
+      }
 
-        // 4) 서버로 저장 시도
-        const payload = {
-          evaluatorUsername: username,     // 로그인 아이디로 저장
+      // 3) 최소 입력 검증
+      if (peerData.length===0 && !selfEvaluation){
+        msg.style.color = '#c53030';
+        msg.textContent = '동료평가나 자기평가 중 하나는 반드시 입력해주세요!';
+        return;
+      }
+
+      // 4) 서버 저장
+      const payload = {
+        evaluatorUsername: CURRENT.username || ss.getItem('username') || '',
+        peerEvaluations: peerData,
+        selfEvaluation,
+        date: new Date().toISOString().split('T')[0]
+      };
+
+      try{
+        const res = await fetch('/api/save-evaluation', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'include',
+          body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        if (!res.ok || !json?.success) throw new Error(json?.error || '저장 실패');
+
+        msg.style.color = '#22543d';
+        msg.textContent = '평가가 성공적으로 저장되었습니다! 🎉';
+        setTimeout(()=>{ resetForm(); msg.textContent=''; }, 2500);
+
+      }catch(e){
+        console.warn('API 저장 실패, 로컬 폴백:', e?.message || e);
+
+        // 폴백: localStorage
+        const evaluationData = {
+          id: Date.now(),
+          date: new Date().toISOString().split('T')[0],
+          timestamp: new Date().toISOString(),
+          student: CURRENT.name || CURRENT.username || '학생',
           peerEvaluations: peerData,
-          selfEvaluation,
-          date: new Date().toISOString().split('T')[0]
+          selfEvaluation
         };
+        try{
+          const existing = JSON.parse(localStorage.getItem('evaluationHistory') || '[]');
+          existing.push(evaluationData);
+          if (existing.length > 200) existing.splice(0, existing.length-200);
+          localStorage.setItem('evaluationHistory', JSON.stringify(existing));
+          localStorage.setItem('lastEvaluation', JSON.stringify(evaluationData));
 
-        try {
-          const res = await fetch('/api/save-evaluation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-
-          const json = await res.json();
-
-          if (!res.ok || !json?.success) {
-            throw new Error(json?.error || '저장 실패');
-          }
-
-          // 성공
           msg.style.color = '#22543d';
-          msg.textContent = '평가가 성공적으로 저장되었습니다! 🎉';
-          setTimeout(() => { resetForm(); msg.textContent = ''; }, 2500);
-
-        } catch (e) {
-          console.warn('API 저장 실패, 로컬 폴백:', e?.message || e);
-
-          // ===== 폴백: localStorage에도 저장해 두자 (개발/오프라인 대비) =====
-          const evaluationData = {
-            id: Date.now(),
-            date: new Date().toISOString().split('T')[0],
-            timestamp: new Date().toISOString(),
-            student: studentDisplayName,
-            peerEvaluations: peerData,
-            selfEvaluation
-          };
-
-          try {
-            const existing = JSON.parse(localStorage.getItem('evaluationHistory') || '[]');
-            existing.push(evaluationData);
-            if (existing.length > 200) existing.splice(0, existing.length - 200);
-            localStorage.setItem('evaluationHistory', JSON.stringify(existing));
-            localStorage.setItem('lastEvaluation', JSON.stringify(evaluationData));
-
-            msg.style.color = '#22543d';
-            msg.textContent = '네트워크 문제로 임시 저장되었습니다. (로컬) ✅';
-            setTimeout(() => { resetForm(); msg.textContent = ''; }, 2500);
-          } catch (err) {
-            msg.style.color = '#c53030';
-            msg.textContent = '저장 중 오류가 발생했습니다.';
-          }
+          msg.textContent = '네트워크 문제로 임시 저장되었습니다. (로컬) ✅';
+          setTimeout(()=>{ resetForm(); msg.textContent=''; }, 2500);
+        }catch(_){
+          msg.style.color = '#c53030';
+          msg.textContent = '저장 중 오류가 발생했습니다.';
         }
       }
+    }
 
-      function resetForm() {
-        document.querySelectorAll('.peer-input').forEach(i => (i.value = ''));
-        document.querySelectorAll('.peer-reason').forEach(r => { r.style.display = 'none'; r.value = ''; });
-        document.querySelectorAll('input[name="self-competency"]').forEach(r => (r.checked = false));
-        document.getElementById('self-reason').value = '';
-      }
-    </script>
-    
+    function resetForm(){
+      document.querySelectorAll('.peer-input').forEach(i=>i.value='');
+      document.querySelectorAll('.peer-reason').forEach(r=>{ r.style.display='none'; r.value=''; });
+      document.querySelectorAll('input[name="self-competency"]').forEach(r=>r.checked=false);
+      document.getElementById('self-reason').value='';
+    }
+  </script>
 </body>
-
 </html>
