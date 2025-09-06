@@ -385,35 +385,68 @@
       const top=stats.topCompetency||'-', total=stats.totalEvaluations||0, days=stats.evaluationDays||0;
       lines.push(`가장 많은 추천 역량: ${top}`);
       lines.push(`총 추천 수: ${total}, 참여 일수: ${days}`);
-      if (pairs.length){ const top3 = pairs.slice(0,3).map(([k,v])=>`${k} ${v}회`).join(', '); lines.push(`상위 역량: ${top3}`); }
+      if (pairs.length){
+        const top3 = pairs.slice(0,3).map(([k,v])=>`${k} ${v}회`).join(', ');
+        lines.push(`상위 역량: ${top3}`);
+      }
       const months=Object.keys(stats.monthlyData||{}).sort();
-      if (months.length>=2){ const first=months[0], last=months.at(-1); const diff=(stats.monthlyData[last]||0)-(stats.monthlyData[first]||0); lines.push(`첫달(${first})→마지막달(${last}) 변화: ${diff>=0?'+':''}${diff}`); }
+      if (months.length>=2){
+        const first=months[0], last=months.at(-1);
+        const diff=(stats.monthlyData[last]||0)-(stats.monthlyData[first]||0);
+        lines.push(`첫달(${first})→마지막달(${last}) 변화: ${diff>=0?'+':''}${diff}`);
+      }
       return lines.join('\n');
     }
+
     async function updateAIAdvice(stats){
       const career=(localStorage.getItem(`career:${username}`)||'').trim();
       const summary=buildStatsSummary(stats);
       const box=document.getElementById('aiAdvice');
       box.textContent='AI 조언 생성 중...';
+
+      // whoami에서 username/rosterId 보조 확보(없으면 기존 값 사용)
+      let me = {};
+      try {
+        const r = await fetch('/api/auth/whoami', {credentials:'include', cache:'no-store'});
+        me = await r.json();
+      } catch {}
+      const myUsername = (me && (me.username || me.uid)) || username;
+      const rosterIdSel = document.getElementById('myRosterSelect');
+      const selectedRosterId = rosterIdSel && rosterIdSel.value ? rosterIdSel.value : (me && me.rosterId) || null;
+
       try{
-        const r=await fetch('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({career,statsSummary:summary})});
+        const r=await fetch('/api/ai-advice',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            career,
+            statsSummary: summary,     // 사람이 읽기 쉬운 요약
+            stats,                     // 원본 숫자 데이터(모델이 표 참고 가능)
+            username: myUsername,      // 내 학번/아이디
+            rosterId: selectedRosterId // 선택된 명부(있으면)
+          })
+        });
         const j=await r.json();
-        if (r.ok && j.success && j.advice){
-          const lines=j.advice.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,5);
-          box.textContent=lines.join('\n'); return;
+
+        // 서버가 정상/오류를 알려주도록 개선 → 메시지 표시
+        if (!r.ok || !j?.success) {
+          console.warn('[ai-advice] server error:', j?.error || r.status);
+          throw new Error(j?.error || 'AI 실패');
         }
-        throw new Error(j.error||'AI 실패');
+
+        const lines=j.advice.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,5);
+        box.textContent=lines.join('\n');
       }catch(e){
+        console.warn('AI 조언 실패, 로컬 규칙으로 대체:', e?.message || e);
         let advice='';
         if ((stats.totalEvaluations||0)===0){
           advice='아직 친구들의 평가가 적어요. 활동에 더 자주 참여해보세요.\n작은 역할부터 맡아보면 추천이 늘어요.\n하루 1번 이상 협업/의사소통을 시도해보세요.';
         }else{
           advice=`강점은 "${stats.topCompetency}"로 보입니다.\n${career?`관심 진로(${career})와 연결해 강점을 실습으로 확장하세요.`:'관심 진로를 입력하면 더 정확한 조언이 제공돼요.'}\n이번 주에 강점이 드러나는 과제를 1개 선택해 주도적으로 시도하세요.\n활동 후 한 문장 회고로 개선점을 적어보세요.`;
         }
-        document.getElementById('aiAdvice').textContent=advice.split('\n').slice(0,5).join('\n');
+        box.textContent = advice.split('\n').slice(0,5).join('\n');
       }
     }
-
     /* ===== 데이터 없음 ===== */
     function showNoDataMessage(msg){
       document.getElementById('totalEvaluations').textContent='0';
@@ -426,6 +459,7 @@
   </script>
 </body>
 </html>
+
 
 
 
