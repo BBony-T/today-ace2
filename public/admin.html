@@ -595,6 +595,37 @@
     /* ───────── 통계(요약) ───────── */
     const COMPETENCIES=['자신감과 리더십','분석','아이디어 뱅크','감정 이해','의사소통','협동심'];
     let currentStatsData=[]; // [{studentId,name,counts:{},total}]
+    // ▼ 활동명을 날짜로 빠르게 찾기 위한 전역 맵
+    let CURRENT_ACTIVITY_MAP = {}; // { 'YYYY-MM-DD': '활동명' }
+
+    // 서버에서 활동목록 가져와 날짜→활동명 맵으로 변환
+    async function getActivityMap({ teacherId, rosterId, start, end }) {
+      try {
+        const qs = new URLSearchParams({
+          teacherId,
+          rosterId: rosterId || '',
+          start: (start || '').toString(),
+          end: (end || '').toString()
+        }).toString();
+
+        // 서버는 { success:true, activities:[{date:'YYYY-MM-DD', title:'모둠 토론', ...}, ...] } 형태라고 가정
+        const r = await fetch('/api/admin/list-activities?' + qs, { credentials:'include', cache:'no-store' });
+        const j = await r.json();
+
+        if (!r.ok || j.success === false) throw new Error(j.error || '활동 조회 실패');
+
+        const map = {};
+        (j.activities || []).forEach(a => {
+          const d = (a.date || '').toString().slice(0,10);
+          const t = a.title || a.name || a.activity || '';
+          if (d && t) map[d] = t; // 날짜 중복이면 최신/마지막값으로 덮어씀
+        });
+        return map;
+      } catch (e) {
+        console.warn('[getActivityMap] fail:', e);
+        return {};
+      }
+    }
 
     // 명부 드롭다운 채우기
     async function refreshStatsFiltersFromRosters() {
@@ -632,7 +663,15 @@
         const from = fromStr ? new Date(fromStr) : null;
         const to   = toStr   ? new Date(toStr)   : null;
 
-        /* 1) (선택) 명부 학생 목록 → 학번↔이름 매핑 */
+        // 0) 활동 맵 선조회(날짜→활동명)
+        CURRENT_ACTIVITY_MAP = await getActivityMap({
+          teacherId: tid,
+          rosterId,
+          start: fromStr,
+          end: toStr
+        });
+
+        // 1) (선택) 명부 학생 목록 → 학번↔이름 매핑
         const idToName = {};
         const nameToId = {};
         if (rosterId){
@@ -649,96 +688,119 @@
             });
           }catch(e){ /* 조용히 계속 진행 */ }
         }
-        const rosterIds = new Set(Object.keys(idToName));   // 선택된 명부의 학번 set
-        const rosterNames = new Set(Object.values(idToName).filter(Boolean)); // 이름 set
-  
-        /* 2) 관리자 접근 가능한 루트 엔드포인트로 전체 평가 조회 */
-        //   - 이 프로젝트에는 /api/get-evaluations 가 존재(학생 페이지에서 사용)하므로 이것을 사용
+        const rosterIds   = new Set(Object.keys(idToName));                         // 학번 set
+        const rosterNames = new Set(Object.values(idToName).filter(Boolean));       // 이름 set
+
+        // 2) 전체 평가 가져오기(관리자 루트)
         const je = await getJson('/api/get-evaluations');
         const evals = Array.isArray(je.evaluations) ? je.evaluations : (je.items || []);
-  
-        // 날짜 필터 도우미
+
+        // 날짜 필터
         const inRange = (dstr)=>{
           if (!from && !to) return true;
-          const d = new Date((dstr||'').toString().slice(0,10)); // YYYY-MM-DD 기준
+          const d = new Date((dstr||'').toString().slice(0,10)); // YYYY-MM-DD
           if (Number.isNaN(+d)) return true;
           if (from && d < from) return false;
           if (to   && d > to)   return false;
           return true;
         };
 
-        /* 3) 집계: 각 평가의 nominees / name을 읽어 역량 카운트
-             - 명부가 선택된 경우: 해당 명부의 학생(학번/이름)에만 집계
-             - 명부 미선택: 전체 대상으로 집계
-        */
-        const map = new Map(); // key: studentId(or 이름), value:{studentId,name,counts,total}
+        // 3) 집계: 학생별 { totals, reasons } 구조로
+        //   reasons: { '의사소통': [ {text, date, activity, from}, ... ], ... }
+        const map = new Map(); // key: studentId(or 이름)
         const ensureRow = (sid, displayName)=>{
           const key = sid || displayName;
           if (!map.has(key)){
-            const counts = {}; COMPETENCIES.forEach(c=>counts[c]=0);
-            map.set(key, { studentId: sid || '', name: displayName || sid || '학생', counts, total: 0 });
+            const totals = {}; COMPETENCIES.forEach(c=>totals[c]=0);
+            map.set(key, {
+              studentId: sid || '',
+              name: displayName || sid || '학생',
+              totals,
+              reasons: {}
+            });
           }
           return map.get(key);
         };
 
+        const norm = (s)=> (s||'').toString().trim().toLowerCase();
+
         evals.forEach(ev=>{
-          if (!inRange(ev.date || ev.timestamp)) return;
+          const dateStr = (ev.date || ev.timestamp || '').toString().slice(0,10);
+          if (!inRange(dateStr)) return;
 
           const peer = Array.isArray(ev.peerEvaluations) ? ev.peerEvaluations : [];
           peer.forEach(p=>{
             const comp = p.competency;
             if (!COMPETENCIES.includes(comp)) return;
 
-            // nominees(배열) 또는 name(단일)을 모두 지원
+            // nominees(배열) 또는 name(단일) 모두 지원
             let targets = [];
             if (Array.isArray(p.nominees)) targets = p.nominees;
             else if (p.name) targets = [p.name];
 
-            targets.forEach(raw=>{
+            const reasonsArr = Array.isArray(p.reasons) ? p.reasons : null; // nominees와 index-기반 매칭
+            const singleReason = p.reason || null;
+
+            targets.forEach((raw, idx)=>{
               const t = (raw||'').toString().trim();
-              // ① 먼저 학번 일치로 시도
+
+              // ① 우선 학번 일치 시도
               let sid = t;
               let nm  = idToName[t] || '';
 
               // ② 학번 매핑이 없고 이름이 명부에 있으면 이름→학번 변환
-              if (!nm && nameToId[t]) { sid = nameToId[t]; nm = idToName[sid] || t; }
+              if (!nm && nameToId[t]) {
+                sid = nameToId[t];
+                nm  = idToName[sid] || t;
+              }
 
-              // 명부 필터: 선택된 명부가 있으면 set에 포함될 때만 집계
+              // 명부 필터: 선택된 명부가 있으면 명부 내 학생만 집계
               if (rosterId){
                 const okById   = rosterIds.has(sid);
                 const okByName = rosterNames.has(t);
                 if (!okById && !okByName) return;
               }
 
+              // 이유 결정: nominees/idx에 맞춰 reasons[index] 우선 → 단일 reason → 공백
+              let reasonText = '';
+              if (reasonsArr && typeof reasonsArr[idx] === 'string') reasonText = reasonsArr[idx];
+              else if (singleReason) reasonText = singleReason;
+
               const row = ensureRow(sid, nm || t);
-              row.counts[comp] += 1;
-              row.total += 1;
+              row.totals[comp] += 1;
+
+              if (!Array.isArray(row.reasons[comp])) row.reasons[comp] = [];
+              row.reasons[comp].push({
+                text: reasonText || '',
+                date: dateStr || '',
+                activity: CURRENT_ACTIVITY_MAP[dateStr] || '',     // 날짜→활동명 보강
+                from: ev.evaluatorUsername || ev.evaluator || ''   // 추천자(학번 등)
+              });
             });
           });
         });
 
         const byStudent = Array.from(map.values()).sort(
-          (a,b)=> b.total - a.total || a.name.localeCompare(b.name,'ko')
+          (a,b)=> (b.totalsTotal || totalOf(b.totals)) - (a.totalsTotal || totalOf(a.totals)) ||
+                  a.name.localeCompare(b.name,'ko')
         );
         currentStatsData = byStudent;
 
-        /* 4) 렌더링 */
+        // 4) 렌더링
         const resultBoxHtml = byStudent.length
           ? byStudent.map(st=>{
-              const rows = COMPETENCIES
-                .map(c=>`<div class="competency-stat"><span>${c}</span><strong>${st.counts[c]||0}</strong></div>`)
-                .join('');
+              const total = totalOf(st.totals);
               return `
                 <div class="student-detail">
                   <div class="student-header" onclick="toggleStudentDetail(this)">
                     <span>${st.name}${st.studentId?` <small style="color:#888">(${st.studentId})</small>`:''}</span>
-                    <span>총 ${st.total} ▼</span>
+                    <span>총 ${total} ▼</span>
                   </div>
                   <div class="student-content">
-                    ${rows}
+                    ${renderCompetencyBlocks(st)}
                   </div>
                 </div>`;
-            }).join('')
+          }).join('')
           : '<div style="text-align:center;color:#666;padding:20px;">데이터가 없습니다.</div>';
         resultBox.innerHTML = resultBoxHtml;
 
@@ -746,8 +808,8 @@
         const totalByComp = {}; COMPETENCIES.forEach(c=>totalByComp[c]=0);
         let totalAll = 0;
         byStudent.forEach(st=>{
-          COMPETENCIES.forEach(c=> totalByComp[c] += (st.counts[c]||0));
-          totalAll += st.total;
+          COMPETENCIES.forEach(c=> totalByComp[c] += (+st.totals[c]||0));
+          totalAll += totalOf(st.totals);
         });
         const top = COMPETENCIES.slice().sort((a,b)=> totalByComp[b]-totalByComp[a])[0] || '-';
 
@@ -759,6 +821,10 @@
           </div>
           ${COMPETENCIES.map(c=>`<div class="competency-stat"><span>${c}</span><strong>${totalByComp[c]}</strong></div>`).join('')}
         `;
+
+        function totalOf(obj){
+          return Object.values(obj||{}).reduce((a,b)=>a+(+b||0),0);
+        }
       }catch(e){
         console.error(e);
         showMessage('통계 조회에 실패했습니다: ' + (e.message||'unknown'), 'error');
@@ -768,6 +834,7 @@
           '<div style="text-align:center;color:#c53030;padding:20px;">통계 조회 실패</div>';
       }
     }
+
 
     // 엑셀 다운로드
     function downloadExcel(){
@@ -930,5 +997,6 @@
   </script>
 </body>
 </html>
+
 
 
