@@ -366,17 +366,84 @@
         options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:11 }}}}}
       });
     }
-    function updateTrendChart(monthlyData){
+    function updateTrendChart(monthlyData) {
       const ctx = document.getElementById('trendChart').getContext('2d');
-      if (trendChart) trendChart.destroy();
-      const months = Object.keys(monthlyData).sort();
-      const values = months.map(m=>monthlyData[m]);
-      trendChart = new Chart(ctx,{
-        type:'line',
-        data:{ labels: months.map(m=>m.substring(5)), datasets:[{ label:'월별 추천 횟수', data:values, borderColor:'#c77dff', backgroundColor:'rgba(199,125,255,0.1)', borderWidth:3, fill:true, tension:.4 }]},
-        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }}, scales:{ y:{ beginAtZero:true }}}
+      if (trendChart) { trendChart.destroy(); }
+
+      // 1) 키(YYYY-MM)를 정렬하고, 사이 월이 비어있으면 0으로 채워 연속 시계열을 만듭니다.
+      const keys = Object.keys(monthlyData || {}).sort();
+      if (!keys.length) {
+        trendChart = new Chart(ctx, { type: 'bar', data: { labels: [], datasets: [] }});
+        return;
+      }
+
+      const start = keys[0];               // 'YYYY-MM'
+      const end   = keys[keys.length - 1];
+
+      const toYM = (s) => {
+        const [y, m] = s.split('-').map(n => parseInt(n, 10));
+        return { y, m };
+      };
+      const pad2 = (n) => (n < 10 ? '0' + n : '' + n);
+    
+      const seqLabels = [];
+      const seqValues = [];
+      // 생성: start ~ end 사이의 모든 월
+      (function build(){
+        let { y, m } = toYM(start);
+        const { y: ey, m: em } = toYM(end);
+        while (y < ey || (y === ey && m <= em)) {
+          const key = `${y}-${pad2(m)}`;
+          seqLabels.push(`${String(y).slice(2)}.${pad2(m)}`); // 예: "25.09"
+          seqValues.push(Number(monthlyData[key] || 0));
+          m += 1;
+          if (m > 12) { m = 1; y += 1; }
+        }
+      })();
+
+      // 2) 막대 차트
+      trendChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: seqLabels,
+          datasets: [{
+            label: '월별 추천 횟수',
+            data: seqValues,
+            backgroundColor: 'rgba(199,125,255,0.35)',  // 보라 톤(페이지와 어울림)
+            borderColor: '#c77dff',
+            borderWidth: 2,
+            borderRadius: 8,
+            barThickness: 'flex',
+            maxBarThickness: 28
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: (items) => `${items[0].label}월`,
+                label: (ctx) => `추천 ${ctx.parsed.y}회`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { maxRotation: 0, autoSkip: true }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0, stepSize: 1 }, // 정수 눈금
+              grid: { color: 'rgba(0,0,0,0.06)' }
+            }
+          }
+        }
       });
     }
+
 
     /* ===== AI 조언 ===== */
     function buildStatsSummary(stats){
@@ -479,6 +546,7 @@
   </script>
 </body>
 </html>
+
 
 
 
