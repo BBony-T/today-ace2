@@ -823,16 +823,112 @@
       await loadSavedRosters();                     // 저장된 명부 카드
       await loadStudentStatus({ forceEmpty: true }); // 현황은 빈 화면에서 시작
       loadActivityList();                           // 활동 목록 (기존)
+      // ▼ 이 세 가지가 바뀌면 활동 목록 갱신
+      document.getElementById('statsRosterSelect')?.addEventListener('change', loadActivityList);
+      document.getElementById('startDate')?.addEventListener('change', loadActivityList);
+      document.getElementById('endDate')?.addEventListener('change', loadActivityList);
     });
 
     /* 활동 정보(기존 자리채움) */
-    function addActivityInfo(){ /* 기존 구현 */ }
-    function loadActivityList(){ /* 기존 구현 */ }
-    function removeActivity(id){ /* 기존 구현 */ }
-    function clearAllActivities(){ /* 기존 구현 */ }
+    // 선택된 명부 id
+    function _selectedRosterId() {
+      const sel = document.getElementById('statsRosterSelect');
+      return sel && sel.value ? sel.value : '';
+    }
+
+    // 활동 목록 UI 렌더
+    function renderActivityList(items) {
+      const box = document.getElementById('activityList');
+      if (!box) return;
+      if (!items.length) {
+        box.innerHTML = '<div style="color:#888">등록된 활동이 없습니다.</div>';
+        return;
+      }
+      box.innerHTML = items.map(a => `
+        <div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed #eee">
+          <div><strong>${a.date}</strong> · ${a.name}</div>
+          <button onclick="removeActivity('${a.id}','${a.rosterId}','${a.date}')" class="tiny-btn btn-danger">삭제</button>
+        </div>
+      `).join('');
+    }
+
+    // 활동 불러오기 (선택 명부 + 날짜범위)
+    async function loadActivityList() {
+      const rosterId = _selectedRosterId();
+      const activityBox = document.getElementById('activityList');
+      if (activityBox) activityBox.innerHTML = '<div style="color:#666">불러오는 중…</div>';
+      try {
+        const tid   = await ensureTeacherId();
+        const start = (document.getElementById('startDate')?.value || '');
+        const end   = (document.getElementById('endDate')?.value   || '');
+        const qs = new URLSearchParams({ teacherId: tid, rosterId, start, end }).toString();
+
+        const j = await getJson(`/api/admin/list-activities?${qs}`);
+        renderActivityList(j.activities || []);
+      } catch (e) {
+        showMessage('활동 목록 조회 실패: ' + (e.message||''), 'error');
+        if (activityBox) activityBox.innerHTML = '';
+      }
+    }
+
+    // 활동 추가/수정 (버튼 "추가"가 이 함수를 호출)
+    async function addActivityInfo() {
+      const rosterId = _selectedRosterId();
+      const date = document.getElementById('activityDate')?.value?.slice(0,10);
+      const name = document.getElementById('activityName')?.value?.trim();
+
+      if (!rosterId) return showMessage('먼저 통계 조회 상단에서 명부를 선택하세요.', 'error');
+      if (!date || !name) return showMessage('날짜와 활동명을 입력하세요.', 'error');
+
+      try {
+        const tid = await ensureTeacherId();
+        await postJson(`/api/admin/upsert-activity?teacherId=${encodeURIComponent(tid)}`, {
+          rosterId, date, name
+        });
+        document.getElementById('activityName').value = '';
+        await loadActivityList();
+        showMessage('활동이 저장되었습니다.', 'success');
+      } catch (e) {
+        showMessage('활동 저장 실패: ' + (e.message||''), 'error');
+      }
+    }
+
+    // 활동 삭제
+    async function removeActivity(id, rosterId, date) {
+      if (!confirm('삭제할까요?')) return;
+      try {
+        const tid = await ensureTeacherId();
+        await postJson(`/api/admin/delete-activity?teacherId=${encodeURIComponent(tid)}`, {
+          id, rosterId, date
+        });
+        await loadActivityList();
+        showMessage('삭제되었습니다.', 'success');
+      } catch (e) {
+        showMessage('삭제 실패: ' + (e.message||''), 'error');
+      }
+    }
+
+    // (옵션) 현재 명부의 활동 전체 삭제
+    async function clearAllActivities() {
+      if (!confirm('이 명부의 활동을 전부 삭제할까요?')) return;
+      const rosterId = _selectedRosterId();
+      try {
+        const tid = await ensureTeacherId();
+        const j = await getJson(`/api/admin/list-activities?teacherId=${encodeURIComponent(tid)}&rosterId=${encodeURIComponent(rosterId)}`);
+        for (const a of (j.activities||[])) {
+          await postJson(`/api/admin/delete-activity?teacherId=${encodeURIComponent(tid)}`, { id:a.id });
+        }
+        await loadActivityList();
+        showMessage('전체 삭제 완료', 'success');
+      } catch (e) {
+        showMessage('전체 삭제 실패: ' + (e.message||''), 'error');
+      }
+    }
+
     function toggleStudentDetail(h){ const c=h.nextElementSibling,a=h.querySelector('span:last-child'); if(c.classList.contains('expanded')){c.classList.remove('expanded'); a.textContent='▼';}else{c.classList.add('expanded'); a.textContent='▲';} }
     function updateClassInfo(){ /* 필요시 사용 */ }
   </script>
 </body>
 </html>
+
 
