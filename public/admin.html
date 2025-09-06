@@ -516,21 +516,30 @@
     // ...아래 코드는 그대로...
 
     /* ───────── 학생 현황 ───────── */
-    async function loadStudentStatus() {
+    async function loadStudentStatus(opts = {}) {
+      const { rosterId = null, forceEmpty = false } = opts;
+
+      if (forceEmpty && !rosterId) {
+        renderStudentStatusEmpty();
+        document.getElementById('classInfo').textContent = '현재 조회: (선택 필요)';
+        return;
+      }
+
       try {
         const tid = await ensureTeacherId();
-        const res = await fetch(
-          '/api/admin/list-students?onlyActive=1&teacherId=' +
-          encodeURIComponent(tid) + '&_=' + Date.now(),
-          { cache: 'no-store', credentials:'include' }
-        );
+        let url = `/api/admin/list-students?teacherId=${encodeURIComponent(tid)}&_=${Date.now()}`;
+        if (rosterId) url += `&rosterId=${encodeURIComponent(rosterId)}`;
+        else url += `&onlyActive=1`; // 공개용(노출중) 조회가 필요할 때만 사용
+
+        const res = await fetch(url, { cache:'no-store', credentials:'include' });
         const j = await res.json();
         if (!res.ok || !j.success) throw new Error(j.error || '조회 실패');
 
         const students = Array.isArray(j.students) ? j.students : [];
-        document.getElementById('classInfo').textContent = '현재 조회: 전체';
+        document.getElementById('classInfo').textContent =
+          rosterId ? `현재 조회: ${SELECTED_ROSTER_TITLE || '선택된 명부'}` : '현재 조회: (선택 필요)';
 
-        if (students.length === 0) { renderStudentStatusEmpty(); return; }
+        if (!students.length) { renderStudentStatusEmpty(); return; }
 
         const normalized = students.map(s => ({
           name: s.name, studentId: s.studentId,
@@ -539,7 +548,6 @@
           hasSelfEvaluation: !!s.hasSelfEvaluation,
           lastUpdate: s.lastUpdate || '-'
         }));
-
         displayStudentStatus(normalized);
       } catch (e) {
         console.error('현황 조회 오류:', e);
@@ -658,6 +666,7 @@
   </script>
 </body>
 </html>
+
 
 
 
