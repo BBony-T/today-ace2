@@ -169,45 +169,59 @@
   <script>
     /* ===== 세션 인사 ===== */
 
-    /* ===== 공통: 이름/아이디 결정 – student.html과 동일하게 ===== */
+    
+    /* ===== 이름/아이디 결정(3단 폴백) ===== */
     let lastStats = null;
 
     const ss = window.sessionStorage;
-    let username = ss.getItem('username') || 'student1'; // 전역으로 써야 해서 let
+    let username = ss.getItem('username') || 'student1';
     let studentDisplayName = username;
 
     async function resolveIdentity() {
-      // 1) whoami로 현재 로그인 확인
-      try {
-        const r = await fetch('/api/auth/whoami', { credentials: 'include', cache: 'no-store' });
-        const me = await r.json();
-  
-        if (me?.role === 'student') {
-          // 서버가 내려주는 값을 우선 사용
-          if (me.username) username = me.username;
-          if (me.studentName) studentDisplayName = me.studentName;
-  
-          // 다음 페이지에서도 쓰도록 캐시
-          if (studentDisplayName) {
-            ss.setItem('studentInfo', JSON.stringify({ name: studentDisplayName, studentId: username }));
-          }
-        }
-      } catch (e) {
-        // 조용히 폴백
-      }
-
-      // 2) 세션에 저장된 학생정보가 있으면 보완
+      // 1) 세션 캐시 우선
       try {
         const raw = ss.getItem('studentInfo');
         if (raw) {
           const info = typeof raw === 'string' ? JSON.parse(raw) : raw;
-          if (info?.name) studentDisplayName = info.name;
           if (info?.studentId) username = info.studentId;
+          if (info?.name)      studentDisplayName = info.name;
         }
       } catch {}
 
-      // username(학번)만 있고 이름이 없으면 학번을 그대로 사용
-      if (!studentDisplayName) studentDisplayName = username;
+      // 2) whoami로 보완  (⭐ name 과 studentName 둘 다 확인)
+      try {
+        const r  = await fetch('/api/auth/whoami', { credentials:'include', cache:'no-store' });
+        const me = await r.json();
+        if (me?.role === 'student') {
+          username = me.username || me.uid || username;
+
+          const nm = me.name || me.studentName; // ← 여기 추가!
+          if (nm) studentDisplayName = nm;
+
+          // 다음 페이지에서도 쓰도록 캐싱
+          ss.setItem('username', username);
+          ss.setItem('studentInfo', JSON.stringify({ name: studentDisplayName, studentId: username }));
+        }
+      } catch {}
+
+      // 3) 그래도 이름이 없으면 프로필로 1회 보루
+      if (!studentDisplayName || studentDisplayName === username) {
+        try {
+          const pr = await fetch('/api/student/profile?username=' + encodeURIComponent(username), {
+            credentials:'include', cache:'no-store'
+          });
+          const pj = await pr.json();
+          if (pr.ok && pj?.success && pj?.student) {
+           const nm = pj.student.name || pj.student.studentName || '';
+            if (nm) {
+              studentDisplayName = nm;
+              ss.setItem('studentInfo', JSON.stringify({ name: nm, studentId: username }));
+            }
+          }
+        } catch {}
+      }
+
+      if (!studentDisplayName) studentDisplayName = username; // 최종 안전망
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
@@ -216,11 +230,11 @@
       const greet = document.getElementById('greet');
       if (greet) greet.textContent = `${studentDisplayName}님, 안녕하세요!`;
 
-      // ↓ 아래부터는 기존 stats 초기화 흐름 유지
       loadCareerInterest();
-      await fillMyRosters();   // 내 명부 목록 채우기
-      await loadMyStats();     // 첫 항목 자동 조회
+      await fillMyRosters();
+      await loadMyStats();
     });
+
 
     /* ===== 라우팅/로그아웃 ===== */
     function goToInputPage(){ location.href='student.html'; }
@@ -412,6 +426,7 @@
   </script>
 </body>
 </html>
+
 
 
 
