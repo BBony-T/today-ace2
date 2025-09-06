@@ -1,15 +1,13 @@
 // /api/auth/whoami.js
 import { getUserFromReq } from '../_shared/initAdmin.js';
+import { db } from '../_fb.js';
 
 export default async function handler(req, res) {
   try {
-    // 세션(쿠키)에서 유저 정보 복원
     const me = getUserFromReq?.(req);
 
-    // ───────── 학생 로그인 응답 ─────────
     if (me?.role === 'student') {
-      // 이름/아이디는 로그인 시 쿠키에 넣어둔 값을 그대로 전달
-      return res.status(200).json({
+      let out = {
         success: true,
         role: 'student',
         uid: me?.uid || null,
@@ -17,15 +15,28 @@ export default async function handler(req, res) {
         username: me?.username || null,
         teacherId: me?.teacherId || 'T_DEFAULT',
         rosterId: me?.rosterId || null,
-      });
+        rosterIds: me?.rosterIds || null,   // ★ 추가 필드
+      };
+
+      // 누락 시 students/{uid}에서 보강
+      if (!out.rosterIds || !Array.isArray(out.rosterIds)) {
+        const doc = await db().collection('students').doc(String(me?.uid || me?.username || '')).get();
+        if (doc.exists) {
+          const s = doc.data();
+          out.teacherId  = out.teacherId  || s.teacherId || 'T_DEFAULT';
+          out.rosterId   = out.rosterId   || s.rosterId  || null;
+          out.rosterIds  = s.rosterIds || (out.rosterId ? [out.rosterId] : []);
+          out.name       = out.name       || s.name || null;
+          out.username   = out.username   || s.username || doc.id;
+        }
+      }
+      return res.status(200).json(out);
     }
 
-    // ───────── 교사/관리자 응답 ─────────
-    // super는 ?teacherId= 로 임의 전환 가능
+    // 교사/관리자
     const teacherId =
-      (me && me.role === 'super' && req.query.teacherId)
-        ? String(req.query.teacherId)
-        : (me?.teacherId || me?.uid || me?.email || 'T_DEFAULT');
+      (me && me.role === 'super' && req.query.teacherId) ? String(req.query.teacherId)
+      : (me?.teacherId || me?.uid || me?.email || 'T_DEFAULT');
 
     return res.status(200).json({
       success: true,
@@ -35,13 +46,7 @@ export default async function handler(req, res) {
       name: me?.name || null,
       email: me?.email || null,
     });
-  } catch (e) {
-    // 어떤 상황에서도 200 보장(기본값 반환)
-    return res.status(200).json({
-      success: true,
-      role: 'teacher',
-      teacherId: 'T_DEFAULT',
-      uid: 'dev',
-    });
+  } catch {
+    return res.status(200).json({ success: true, role: 'teacher', teacherId: 'T_DEFAULT', uid: 'dev' });
   }
 }
