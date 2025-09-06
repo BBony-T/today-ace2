@@ -102,6 +102,8 @@ export default async function handler(req, res) {
           uid: snap.id,
           teacherId: u.teacherId || null,
           rosterId: u.rosterId || null
+          name: u.name || null,
+          username: u.username || snap.id
         });
       } else {
         const u = userDoc.data();
@@ -122,6 +124,8 @@ export default async function handler(req, res) {
           uid: userDoc.id,
           teacherId: u.teacherId || null,
           rosterId: u.rosterId || null
+          name: u.name || null,
+          username: u.username || snap.id
         });
       }
     }
@@ -162,3 +166,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ success:false, error: e?.message || 'server error' });
   }
 }
+
