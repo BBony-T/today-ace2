@@ -352,21 +352,30 @@
           };
         });
 
-        // ▶ 노출 토글
+        // ▶ 노출 토글 (체크하면 그 명부를 바로 보여줌)
         box.querySelectorAll('.js-publish').forEach(el => {
           el.onchange = async () => {
             const publish = el.checked;
+            const thisId  = el.dataset.id;
             el.disabled = true;
             try {
               const tid = await ensureTeacherId();
               await postJson('/api/admin/publish-roster?teacherId=' + encodeURIComponent(tid), {
-                rosterId: el.dataset.id, publish
+                rosterId: thisId, publish
               });
               await refreshStatsFiltersFromRosters();
 
-              // 현재 선택 유지(선택 없으면 빈 화면 유지)
-              if (SELECTED_ROSTER_ID) await loadStudentStatus({ rosterId: SELECTED_ROSTER_ID });
-              else await loadStudentStatus({ forceEmpty: true });
+              if (publish) {
+                // 토글 ON → 방금 토글한 명부를 선택해서 즉시 표시
+                SELECTED_ROSTER_ID = thisId;
+                const viewEl = box.querySelector(`.js-view[data-id="${thisId}"]`);
+                SELECTED_ROSTER_TITLE = viewEl?.dataset.title || '';
+                await loadStudentStatus({ rosterId: SELECTED_ROSTER_ID });
+              } else {
+                // 토글 OFF → 선택 유지(없으면 빈화면)
+                if (SELECTED_ROSTER_ID) await loadStudentStatus({ rosterId: SELECTED_ROSTER_ID });
+                else await loadStudentStatus({ forceEmpty: true });
+              }
             } catch (e) {
               alert('노출 설정 실패: ' + (e.message || 'unknown'));
               el.checked = !publish;
@@ -527,22 +536,39 @@
 
       try {
         const tid = await ensureTeacherId();
+
+        // 1) 요청 URL: 서버 구현 차이를 대비해 파라미터명을 세 가지 모두 붙임
         let url = `/api/admin/list-students?teacherId=${encodeURIComponent(tid)}&_=${Date.now()}`;
-        if (rosterId) url += `&rosterId=${encodeURIComponent(rosterId)}`;
-        else url += `&onlyActive=1`; // 공개용(노출중) 조회가 필요할 때만 사용
+        if (rosterId) {
+          const rid = encodeURIComponent(rosterId);
+          url += `&rosterId=${rid}&rid=${rid}&roster=${rid}`;
+        } else {
+          // 선택 안 했을 때는 '노출중(공개)'만 보기용으로
+          url += `&onlyActive=1`;
+        }
 
-        const res = await fetch(url, { cache:'no-store', credentials:'include' });
+        const res = await fetch(url, { cache: 'no-store', credentials: 'include' });
         const j = await res.json();
-        if (!res.ok || !j.success) throw new Error(j.error || '조회 실패');
+        if (!res.ok || j.success === false) throw new Error(j.error || '조회 실패');
 
-        const students = Array.isArray(j.students) ? j.students : [];
+        // 2) 응답 보정: 혹시 서버가 전체를 돌려줘도 프런트에서 한 번 더 거른다
+        let students = Array.isArray(j.students) ? j.students : [];
+        if (rosterId) {
+          students = students.filter(s => {
+            const r = (s.rosterId || s.roster || s.rid);
+            const t = (s.teacherId || s.tid || s.ownerId);
+            return r === rosterId && (!t || t === tid); // rosterId 일치 + (있다면) 내 teacherId 일치
+          });
+        }
+
         document.getElementById('classInfo').textContent =
           rosterId ? `현재 조회: ${SELECTED_ROSTER_TITLE || '선택된 명부'}` : '현재 조회: (선택 필요)';
 
         if (!students.length) { renderStudentStatusEmpty(); return; }
 
         const normalized = students.map(s => ({
-          name: s.name, studentId: s.studentId,
+          name: s.name,
+          studentId: s.studentId,
           status: s.status || 'not-started',
           hasPeerEvaluation: !!s.hasPeerEvaluation,
           hasSelfEvaluation: !!s.hasSelfEvaluation,
@@ -555,6 +581,7 @@
         renderStudentStatusEmpty();
       }
     }
+
 
     function renderStudentStatusEmpty(){
       const grid=document.getElementById('studentStatusGrid');
@@ -666,6 +693,7 @@
   </script>
 </body>
 </html>
+
 
 
 
