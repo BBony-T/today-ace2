@@ -56,7 +56,7 @@
     /* AI 조언 */
     .ai-advice{background:#fff;border:3px solid #c77dff;border-radius:15px;padding:25px;background:#faf7ff}
     .ai-advice h3{color:#2d3748;margin-bottom:15px;font-size:18px;text-align:center}
-    .advice-content{color:#4a5568;line-height:1.6;font-size:14px}
+    .advice-content{color:#4a5568;line-height:1.6;font-size:14px; white-space: pre-line;}
 
     .no-data{text-align:center;color:#666;font-size:16px;padding:40px}
 
@@ -399,54 +399,73 @@
     }
 
     async function updateAIAdvice(stats){
-      const career=(localStorage.getItem(`career:${username}`)||'').trim();
-      const summary=buildStatsSummary(stats);
-      const box=document.getElementById('aiAdvice');
-      box.textContent='AI 조언 생성 중...';
+      const career = (localStorage.getItem(`career:${username}`) || '').trim();
+      const summary = buildStatsSummary(stats);
+      const box = document.getElementById('aiAdvice');
+      box.textContent = 'AI 조언 생성 중...';
 
       // whoami에서 username/rosterId 보조 확보(없으면 기존 값 사용)
       let me = {};
       try {
-        const r = await fetch('/api/auth/whoami', {credentials:'include', cache:'no-store'});
+        const r = await fetch('/api/auth/whoami', { credentials:'include', cache:'no-store' });
         me = await r.json();
       } catch {}
       const myUsername = (me && (me.username || me.uid)) || username;
       const rosterIdSel = document.getElementById('myRosterSelect');
-      const selectedRosterId = rosterIdSel && rosterIdSel.value ? rosterIdSel.value : (me && me.rosterId) || null;
-
+      const selectedRosterId =
+        (rosterIdSel && rosterIdSel.value) ? rosterIdSel.value : (me && me.rosterId) || null;
+    
       try{
-        const r=await fetch('/api/ai-advice',{
+        const r = await fetch('/api/ai-advice', {
           method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
             career,
-            statsSummary: summary,     // 사람이 읽기 쉬운 요약
-            stats,                     // 원본 숫자 데이터(모델이 표 참고 가능)
-            username: myUsername,      // 내 학번/아이디
-            rosterId: selectedRosterId // 선택된 명부(있으면)
+            statsSummary: summary, // 사람이 읽기 쉬운 요약
+            stats,                 // 원본 숫자 데이터(모델이 표 참고 가능)
+            username: myUsername,  // 내 학번/아이디
+            rosterId: selectedRosterId
+            // 필요 시 reasons/activities도 여기에 추가해서 보낼 수 있어요.
           })
         });
-        const j=await r.json();
+        const j = await r.json();
 
-        // 서버가 정상/오류를 알려주도록 개선 → 메시지 표시
         if (!r.ok || !j?.success) {
           console.warn('[ai-advice] server error:', j?.error || r.status);
           throw new Error(j?.error || 'AI 실패');
         }
 
-        const lines=j.advice.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,5);
-        box.textContent=lines.join('\n');
-      }catch(e){
+        // ✅ 더 이상 5줄로 자르지 않음. 그대로 노출
+        box.textContent = (j.advice || '').trim();
+
+      } catch (e) {
         console.warn('AI 조언 실패, 로컬 규칙으로 대체:', e?.message || e);
-        let advice='';
-        if ((stats.totalEvaluations||0)===0){
-          advice='아직 친구들의 평가가 적어요. 활동에 더 자주 참여해보세요.\n작은 역할부터 맡아보면 추천이 늘어요.\n하루 1번 이상 협업/의사소통을 시도해보세요.';
-        }else{
-          advice=`강점은 "${stats.topCompetency}"로 보입니다.\n${career?`관심 진로(${career})와 연결해 강점을 실습으로 확장하세요.`:'관심 진로를 입력하면 더 정확한 조언이 제공돼요.'}\n이번 주에 강점이 드러나는 과제를 1개 선택해 주도적으로 시도하세요.\n활동 후 한 문장 회고로 개선점을 적어보세요.`;
+
+        // ✅ 폴백도 다정한 톤으로
+        let advice = '';
+        if ((stats.totalEvaluations || 0) === 0) {
+          advice = [
+            '아직 받은 평가가 많지 않아요. 그래도 지금까지의 시도, 정말 잘하고 있어요! 😊',
+            '이번 주에는 수업/활동에 한 번 더 참여해 보며 작은 경험을 하나 더 쌓아볼까요?',
+            '하루가 끝날 때 “잘한 점 1가지, 다음에 더 해보고 싶은 점 1가지”를 간단히 적어보면 좋아요.',
+          ].join('\n');
+        } else {
+          const top = stats.topCompetency || '-';
+          advice = [
+            `요약을 보니 "${top}" 강점이 특히 잘 드러나고 있어요. 멋져요!`,
+            career
+              ? `관심 분야인 ${career}와 연결해 강점을 조금씩 확장해 보면 좋겠어요.`
+              : '관심 진로를 입력해 주면 더 딱 맞는 제안을 드릴 수 있어요.',
+            '이번 주에는 강점이 드러나는 활동을 하나 정해 가볍게 시도해보면 어떨까요?',
+            '그리고 활동 후에는 1문장으로 짧게 회고를 남겨 보세요. 작은 기록이 큰 변화를 만듭니다.',
+          ].join('\n');
         }
-        box.textContent = advice.split('\n').slice(0,5).join('\n');
+
+        // ✅ 폴백도 자르지 않음
+        box.textContent = advice.trim();
       }
     }
+
     /* ===== 데이터 없음 ===== */
     function showNoDataMessage(msg){
       document.getElementById('totalEvaluations').textContent='0';
@@ -459,6 +478,7 @@
   </script>
 </body>
 </html>
+
 
 
 
