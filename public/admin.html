@@ -994,9 +994,44 @@
 
     function toggleStudentDetail(h){ const c=h.nextElementSibling,a=h.querySelector('span:last-child'); if(c.classList.contains('expanded')){c.classList.remove('expanded'); a.textContent='▼';}else{c.classList.add('expanded'); a.textContent='▲';} }
     function updateClassInfo(){ /* 필요시 사용 */ }
+
+    // 한 학생의 역량별 상세(횟수 + 이유 목록[활동/날짜/추천자]) 렌더
+    function renderCompetencyBlocks(s){
+      const totals  = s.totals || {};
+      const reasons = s.reasons || {};
+
+      return COMPETENCIES.map(c => {
+        const cnt = +totals[c] || 0;
+        const list = Array.isArray(reasons[c]) ? reasons[c] : [];
+
+        const body = list.length
+          ? list.map(r=>{
+              const d   = (r.date || '').toString().slice(0,10);
+              const act = r.activity || (CURRENT_ACTIVITY_MAP[d] || '');
+              const by  = r.from ? ` · by ${r.from}` : '';
+              const actBadge = act ? ` <span style="color:#805ad5; font-size:12px;">[${act}]</span>` : '';
+              const dateBadge= d   ? ` <span style="color:#718096; font-size:12px;">${d}</span>` : '';
+              const txt = (r.text || r.reason || '').toString().trim() || '(이유 미기재)';
+              return `<li style="margin:4px 0; line-height:1.5;">
+                <span style="color:#1a202c;">${txt}</span>${actBadge}${dateBadge}<span style="color:#a0aec0; font-size:12px;">${by}</span>
+              </li>`;
+            }).join('')
+          : `<li style="color:#a0aec0;">이유 기록 없음</li>`;
+
+        return `
+          <div class="competency-stat" style="flex-direction:column; align-items:stretch;">
+            <div style="display:flex; justify-content:space-between; font-weight:600;">
+              <span>${c}</span><span>${cnt}회</span>
+            </div>
+            <ul style="margin-top:6px; padding-left:18px;">${body}</ul>
+          </div>`;
+      }).join('');
+    }
+
   </script>
 </body>
 </html>
+
 
 
 
