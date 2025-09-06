@@ -72,8 +72,8 @@
       <h2>👨‍🏫 관리자 메뉴</h2>
       <p>선생님, 안녕하세요!</p>
     </div>
-    <button class="menu-item active" onclick="showPage('status')">📋 현황 페이지</button>
-    <button class="menu-item" onclick="showPage('statistics')">📊 통계 페이지</button>
+    <button class="menu-item active" onclick="showPage('status', this)">📋 현황 페이지</button>
+    <button class="menu-item" onclick="showPage('statistics, this')">📊 통계 페이지</button>
     <button class="logout-btn" onclick="logout()">🚪 로그아웃</button>
   </div>
 
@@ -284,20 +284,14 @@
 
     function getTeacherId() { return TEACHER_ID || 'T_DEFAULT'; }
 
-    // 초기 로드 순서 보장
-    document.addEventListener('DOMContentLoaded', async () => {
-      await ensureTeacherId();
-      loadSavedRosters();
-      loadStudentStatus();
-      if (typeof loadActivityList === 'function') loadActivityList();
-    });
     
     /* ───────── 페이지 전환 ───────── */
-    function showPage(pageType){
+    function showPage(pageType, el){
       document.querySelectorAll('.menu-item').forEach(b=>b.classList.remove('active'));
-      event.target.classList.add('active');
+      if (el) el.classList.add('active');
       document.querySelectorAll('.page-content').forEach(x=>x.classList.remove('active'));
-      if(pageType==='status'){ document.getElementById('statusPage').classList.add('active'); loadStudentStatus(); }
+      if(pageType==='status'){document.getElementById('statusPage').classList.add('active');
+                              loadStudentStatus({ forceEmpty: true }); }// 선택 전엔 항상 비워둠
       else { document.getElementById('statisticsPage').classList.add('active'); loadStatistics(); }
     }
 
@@ -681,7 +675,7 @@
       await ensureTeacherId();   // teacherId 먼저 확보
       await refreshStatsFiltersFromRosters(); // ← 추가!
       await loadSavedRosters();        // 저장된 명부
-      await loadStudentStatus();       // 현황판
+      await loadStudentStatus({ forceEmpty: true }); // ✅ 항상 빈 화면으로 시작
       loadActivityList();        // 활동목록(기존)
     });
 
@@ -695,6 +689,7 @@
   </script>
 </body>
 </html>
+
 
 
 
