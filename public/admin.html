@@ -264,6 +264,38 @@
       return `${d.getFullYear()}-${mm}-${dd}`;
     }
     
+    function pickReasonForTarget(p, idx, rawTarget, sid, name){
+      const norm = (s)=> (s||'').toString().trim().toLowerCase();
+      const candidates = [rawTarget, sid, name].filter(Boolean);
+
+      // 1) 배열 인덱스 정렬형: reasons[idx]
+      if (Array.isArray(p.reasons) && typeof p.reasons[idx] === 'string') {
+        return p.reasons[idx];
+      }
+
+      // 2) 맵형: { "30202": "..." } 또는 { "박누리": "..." }
+      if (p.reasons && typeof p.reasons === 'object' && !Array.isArray(p.reasons)) {
+        for (const k of Object.keys(p.reasons)) {
+          if (candidates.some(c => norm(k) === norm(c))) return p.reasons[k];
+        }
+      }
+
+      // 3) 쌍 리스트형: nomineeReasons: [{target:'30202'| '박누리', reason:'...'}]
+      if (Array.isArray(p.nomineeReasons)) {
+        const hit = p.nomineeReasons.find(x =>
+          candidates.some(c => norm(x.target) === norm(c))
+        );
+        if (hit) return hit.reason || hit.text || '';
+      }
+
+      // 4) 단일 이유
+      if (typeof p.reason === 'string') return p.reason;
+
+      // 5) 없으면 공백
+      return '';
+    }
+      
+    
     /* ───────── teacherId 확보 ───────── */
     let TEACHER_ID =
       sessionStorage.getItem('teacherId') ||
@@ -792,11 +824,11 @@
                 const okByName = rosterNames.has(t);
                 if (!okById && !okByName) return;
               }
-
+              // ✅ 대상자별 이유 선택(형식 혼합 지원)
               const reasonText = pickReasonForTarget(p, idx, t, sid, nm);
 
               const row = ensureRow(sid, nm || t);
-              row.totals[comp] += 1;
+              row.totals[comp] = (row.totals[comp]||0) + 1;
 
               if (!Array.isArray(row.reasons[comp])) row.reasons[comp] = [];
               row.reasons[comp].push({
@@ -1090,6 +1122,7 @@
   </script>
 </body>
 </html>
+
 
 
 
