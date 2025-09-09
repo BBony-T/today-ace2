@@ -710,21 +710,19 @@
     }
 
 
+    // ✅ 관리자용 평가 전체 조회 (teacherId 기반)
     async function fetchAllEvaluationsForAdmin(tid) {
-      // 1) 관리자용(권장)
+      // 1순위: 루트 단수 엔드포인트 (현재 프로젝트 표준)
+      const p1 = `/api/get-evaluation?teacherId=${encodeURIComponent(tid)}`;
       try {
-        const j = await getJson('/api/admin/get-evaluations?teacherId=' + encodeURIComponent(tid));
+        const j = await getJson(p1);
         return Array.isArray(j.evaluations) ? j.evaluations : (j.items || []);
-      } catch (e1) {
-        // 2) 구 공용 라우트 폴백 (배포 환경에 따라 ?all=1 이 필요할 수 있음)
-        try {
-          const j = await getJson('/api/get-evaluations?all=1');
-          return Array.isArray(j.evaluations) ? j.evaluations : (j.items || []);
-        } catch (e2) {
-          // 3) 최종 실패 → 원인 bubbles up
-          throw e2;
-        }
-      }
+      } catch (_) {
+        // 2순위(호환): 혹시나 플러럴 버전이 teacherId를 지원하는 경우 대비
+        const p2 = `/api/get-evaluations?teacherId=${encodeURIComponent(tid)}`;
+        const j = await getJson(p2);
+        return Array.isArray(j.evaluations) ? j.evaluations : (j.items || []);
+      }  
     }
     
     // ★★★ 통계 조회 구현
@@ -1132,6 +1130,7 @@
   </script>
 </body>
 </html>
+
 
 
 
