@@ -652,20 +652,19 @@
           teacherId,
           rosterId: rosterId || '',
           start: (start || '').toString(),
-          end: (end || '').toString()
+          end:   (end   || '').toString()
         }).toString();
-
-        // 서버는 { success:true, activities:[{date:'YYYY-MM-DD', title:'모둠 토론', ...}, ...] } 형태라고 가정
-        const r = await fetch('/api/admin/list-activities?' + qs, { credentials:'include', cache:'no-store' });
+    
+        const r = await fetch('/api/admin/list-activities?' + qs,
+          { credentials:'include', cache:'no-store' });
         const j = await r.json();
-
         if (!r.ok || j.success === false) throw new Error(j.error || '활동 조회 실패');
-
+    
         const map = {};
         (j.activities || []).forEach(a => {
-          const k = dateKey(a.date || a.timestamp);                  // ✅ 날짜 키 통일
+          const d = dateKey(a.date);
           const t = a.title || a.name || a.activity || '';
-          if (k && t) map[k] = t; // 같은 날 여러 건이면 마지막 값으로 덮어씀
+          if (d && t) map[d] = t;
         });
         return map;
       } catch (e) {
@@ -711,6 +710,23 @@
       return '';
     }
 
+
+    async function fetchAllEvaluationsForAdmin(tid) {
+      // 1) 관리자용(권장)
+      try {
+        const j = await getJson('/api/admin/get-evaluations?teacherId=' + encodeURIComponent(tid));
+        return Array.isArray(j.evaluations) ? j.evaluations : (j.items || []);
+      } catch (e1) {
+        // 2) 구 공용 라우트 폴백 (배포 환경에 따라 ?all=1 이 필요할 수 있음)
+        try {
+          const j = await getJson('/api/get-evaluations?all=1');
+          return Array.isArray(j.evaluations) ? j.evaluations : (j.items || []);
+        } catch (e2) {
+          // 3) 최종 실패 → 원인 bubbles up
+          throw e2;
+        }
+      }
+    }
     
     // ★★★ 통계 조회 구현
     async function loadStatistics(){
@@ -756,8 +772,7 @@
         const rosterNames = new Set(Object.values(idToName).filter(Boolean));       // 이름 set
 
         // 2) 전체 평가 가져오기(관리자 루트)
-        const je = await getJson('/api/get-evaluations');
-        const evals = Array.isArray(je.evaluations) ? je.evaluations : (je.items || []);
+        const evals = await fetchAllEvaluationsForAdmin(tid);
 
         // 날짜 필터
         const inRange = (dstr)=>{
@@ -1118,6 +1133,7 @@
   </script>
 </body>
 </html>
+
 
 
 
