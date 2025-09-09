@@ -646,7 +646,7 @@
     let CURRENT_ACTIVITY_MAP = {}; // { 'YYYY-MM-DD': '활동명' }
 
     // 서버에서 활동목록 가져와 날짜→활동명 맵으로 변환
-    async function getActivityMap({ teacherId, rosterId, start, end }) {
+    async function getActivityMapFromServer({ teacherId, rosterId, start, end }) {
       try {
         const qs = new URLSearchParams({
           teacherId,
@@ -654,12 +654,11 @@
           start: (start || '').toString(),
           end:   (end   || '').toString()
         }).toString();
-    
         const r = await fetch('/api/admin/list-activities?' + qs,
           { credentials:'include', cache:'no-store' });
         const j = await r.json();
         if (!r.ok || j.success === false) throw new Error(j.error || '활동 조회 실패');
-    
+
         const map = {};
         (j.activities || []).forEach(a => {
           const d = dateKey(a.date);
@@ -668,7 +667,7 @@
         });
         return map;
       } catch (e) {
-        console.warn('[getActivityMap] fail:', e);
+       console.warn('[getActivityMapFromServer] fail:', e);
         return {};
       }
     }
@@ -744,7 +743,7 @@
         const to   = toStr   ? new Date(toStr)   : null;
 
         // 0) 활동 맵 선조회(날짜→활동명)
-        CURRENT_ACTIVITY_MAP = await getActivityMap({
+        CURRENT_ACTIVITY_MAP = await getActivityMapFromServer({
           teacherId: tid,
           rosterId,
           start: fromStr,
@@ -1133,6 +1132,7 @@
   </script>
 </body>
 </html>
+
 
 
 
