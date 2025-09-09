@@ -713,7 +713,7 @@
     // ✅ 관리자용 평가 전체 조회 (teacherId 기반)
     async function fetchAllEvaluationsForAdmin(tid) {
       // 1순위: 루트 단수 엔드포인트 (현재 프로젝트 표준)
-      const p1 = `/api/get-evaluation?teacherId=${encodeURIComponent(tid)}`;
+      const p1 = `/api/get-evaluations?teacherId=${encodeURIComponent(tid)}`;
       try {
         const j = await getJson(p1);
         return Array.isArray(j.evaluations) ? j.evaluations : (j.items || []);
@@ -1130,6 +1130,7 @@
   </script>
 </body>
 </html>
+
 
 
 
