@@ -709,37 +709,45 @@
       return '';
     }
      
-    // 관리자용 평가 조회 (존재하는 루트 엔드포인트만 시도)
-    async function fetchAllEvaluationsForAdmin(tid) {
-      async function tryGet(url) {
-        try {
-          const r = await fetch(url, { credentials:'include', cache:'no-store' });
-          let j = {};
-          try { j = await r.clone().json(); } catch {}
-          if (!r.ok) throw new Error(j?.error || r.statusText || `HTTP ${r.status}`);
-    
-          // 다양한 스키마 허용: evaluations / items / 루트 배열
-          const arr =
-            (Array.isArray(j?.evaluations) && j.evaluations) ||
-            (Array.isArray(j?.items) && j.items) ||
-            (Array.isArray(j) && j) ||
-            [];
-          return arr;
-        } catch {
-          return null;
-        }
-      }
-
-      // 루트만 사용 (존재 확인된 경로)
-      return (
-        (await tryGet(`/api/get-evaluations?all=1&teacherId=${encodeURIComponent(tid)}`)) ||
-        (await tryGet('/api/get-evaluations?all=1')) ||
-        (await tryGet(`/api/get-evaluations?teacherId=${encodeURIComponent(tid)}`)) ||
-        (await tryGet('/api/get-evaluations')) ||
-        []
-      );
+    // ---- 안전 JSON fetch (성공/실패를 그대로 돌려줌: 절대 throw 안 함)
+    async function safeFetchJson(url) {
+      const r = await fetch(url, { credentials: 'include', cache: 'no-store' });
+      const text = await r.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = null; }
+      return { ok: r.ok, status: r.status, data, raw: text };
     }
 
+    // ---- 관리자용 평가 전체 조회 (여러 조합을 순차 시도; 절대 throw 안 함)
+    async function fetchAllEvaluationsForAdmin(tid) {
+      const cand = [
+        `/api/get-evaluations?all=1&teacherId=${encodeURIComponent(tid)}`,
+        `/api/get-evaluations?all=1`,
+        `/api/get-evaluations?teacherId=${encodeURIComponent(tid)}`,
+        `/api/get-evaluations`
+      ];
+
+      for (const u of cand) {
+        console.log('[fetchAllEvaluationsForAdmin] try:', u);
+        const { ok, status, data, raw } = await safeFetchJson(u);
+        if (!ok) {
+          console.warn('[get-evaluations] HTTP', status, data?.error || raw?.slice(0,120));
+          continue;
+        }
+        // 다양한 스키마(evaluations/items/루트배열) 지원
+        const arr =
+          (Array.isArray(data?.evaluations) && data.evaluations) ||
+         (Array.isArray(data?.items) && data.items) ||
+          (Array.isArray(data) && data) ||
+          [];
+        console.log('[fetchAllEvaluationsForAdmin] got', arr.length, 'items from', u);
+        if (arr.length) return arr;   // 첫 성공을 채택
+        // 성공이지만 비어있으면 다음 후보도 시도 (환경마다 스키마 다를 수 있어서)
+      }
+      console.warn('[fetchAllEvaluationsForAdmin] no data from all candidates. return []');
+      return [];
+    }
+     
     // ★★★ 통계 조회 구현
     async function loadStatistics(){
       const resultBox = document.getElementById('statisticsResults');
@@ -1155,6 +1163,7 @@
   </script>
 </body>
 </html>
+
 
 
 
