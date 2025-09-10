@@ -266,41 +266,7 @@
       const dd = String(d.getDate()).padStart(2,'0');
       return `${d.getFullYear()}-${mm}-${dd}`;
     }
-    
-    function pickReasonForTarget(p, idx, rawTarget, sid, name){
-      const norm = (s)=> (s||'').toString().trim().toLowerCase();
-      const rosterIdsNorm   = new Set(Object.keys(idToName).map(norm));                 // 학번/아이디 표준화 set
-      const rosterNamesNorm = new Set(Object.values(idToName).filter(Boolean).map(norm)); // 이름 표준화 set
-      const candidates = [rawTarget, sid, name].filter(Boolean);
-
-      // 1) 배열 인덱스 정렬형: reasons[idx]
-      if (Array.isArray(p.reasons) && typeof p.reasons[idx] === 'string') {
-        return p.reasons[idx];
-      }
-
-      // 2) 맵형: { "30202": "..." } 또는 { "박누리": "..." }
-      if (p.reasons && typeof p.reasons === 'object' && !Array.isArray(p.reasons)) {
-        for (const k of Object.keys(p.reasons)) {
-          if (candidates.some(c => norm(k) === norm(c))) return p.reasons[k];
-        }
-      }
-
-      // 3) 쌍 리스트형: nomineeReasons: [{target:'30202'| '박누리', reason:'...'}]
-      if (Array.isArray(p.nomineeReasons)) {
-        const hit = p.nomineeReasons.find(x =>
-          candidates.some(c => norm(x.target) === norm(c))
-        );
-        if (hit) return hit.reason || hit.text || '';
-      }
-
-      // 4) 단일 이유
-      if (typeof p.reason === 'string') return p.reason;
-
-      // 5) 없으면 공백
-      return '';
-    }
       
-    
     /* ───────── teacherId 확보 ───────── */
     let TEACHER_ID =
       sessionStorage.getItem('teacherId') ||
@@ -799,6 +765,11 @@
         }
         const rosterIds   = new Set(Object.keys(idToName));                   // 학번 set
         const rosterNames = new Set(Object.values(idToName).filter(Boolean)); // 이름 set
+
+        // ✅ 추가 (여기! pickReasonForTarget 아님)
+        const norm = s => (s ?? '').toString().trim().toLowerCase();
+        const rosterIdsNorm   = new Set(Object.keys(idToName).map(norm));
+        const rosterNamesNorm = new Set(Object.values(idToName).filter(Boolean).map(norm));
     
         // 3) 전체 평가 가져오기(관리자 루트)  ← all=1 사용
         const evals = await fetchAllEvaluationsForAdmin(tid);
@@ -1210,6 +1181,7 @@
   </script>
 </body>
 </html>
+
 
 
 
