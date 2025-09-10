@@ -754,6 +754,8 @@
             const rid = encodeURIComponent(rosterId);
             const j = await getJson(`/api/admin/list-students?teacherId=${encodeURIComponent(tid)}&rosterId=${rid}&rid=${rid}`);
             const arr = Array.isArray(j.students) ? j.students : [];
+            console.log('[stats] list-students:', { rosterId, count: arr.length, sample: arr.slice(0,3) }); // ← 추가
+            
             arr.forEach(s=>{
               if (!s) return;
               const sid = (s.studentId || '').toString().trim();     // 학번
@@ -765,7 +767,9 @@
               // 이름 → 대표 id (없으면 username, 그것도 없으면 이름)
               if (nm)  nameToId[nm]  = sid || uid || nm;
             });
-          }catch(e){ /* 조용히 계속 */ }
+          }catch(e){ 
+            console.warn('[stats] list-students fail:', e);
+          }
         }
         const rosterIds   = new Set(Object.keys(idToName));
         const rosterNames = new Set(Object.values(idToName).filter(Boolean));
@@ -891,8 +895,11 @@
                   candNames.some(x => rosterNamesNorm.has(x));
 
                 if (!ok) return;
+                rosterPassCount++;
+              } else {
+                // 명부 선택은 있었지만 학생셋이 비면 임시로 필터 미적용 (원인 파악용)
+                rosterPassCount++;
               }
-              rosterPassCount++;
     
               // 대상자별 이유 선택
               let reasonText = '';
@@ -1189,6 +1196,7 @@
   </script>
 </body>
 </html>
+
 
 
 
