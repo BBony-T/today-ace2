@@ -249,14 +249,17 @@
       return j;
     }
     
-    // 날짜 문자열을 'YYYY-MM-DD'로 통일
+    // ▼ 날짜를 'YYYY-MM-DD'로 정규화
     function dateKey(v){
       if (!v) return '';
-      // 1) 이미 YYYY-MM-DD면 그대로
+      // Firestore Timestamp 대응
+      if (typeof v === 'object') {
+        if (typeof v.toDate === 'function') v = v.toDate();
+        else if (typeof v.seconds === 'number') v = new Date(v.seconds * 1000);
+      }
       const s = String(v);
       const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-      // 2) Date로 파싱 후 포맷
       const d = new Date(s);
       if (isNaN(+d)) return '';
       const mm = String(d.getMonth()+1).padStart(2,'0');
@@ -707,15 +710,6 @@
       if (typeof p.reason === 'string') return p.reason;
       // 4) 없으면 빈 문자열
       return '';
-    }
-     
-    // ---- 안전 JSON fetch (성공/실패를 그대로 돌려줌: 절대 throw 안 함)
-    async function safeFetchJson(url) {
-      const r = await fetch(url, { credentials: 'include', cache: 'no-store' });
-      const text = await r.text();
-      let data;
-      try { data = JSON.parse(text); } catch { data = null; }
-      return { ok: r.ok, status: r.status, data, raw: text };
     }
 
     // ---- 관리자용 평가 전체 조회 (여러 조합을 순차 시도; 절대 throw 안 함)
@@ -1209,6 +1203,7 @@
   </script>
 </body>
 </html>
+
 
 
 
