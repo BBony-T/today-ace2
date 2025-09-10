@@ -756,10 +756,14 @@
             const arr = Array.isArray(j.students) ? j.students : [];
             arr.forEach(s=>{
               if (!s) return;
-              const id = (s.studentId || s.username || '').toString().trim();
-              const nm = (s.name || s.studentName || '').toString().trim();
-              if (id)  idToName[id] = nm || id;
-              if (nm)  nameToId[nm] = id || nm;
+              const sid = (s.studentId || '').toString().trim();     // 학번
+              const uid = (s.username  || '').toString().trim();     // username
+              const nm  = (s.name || s.studentName || '').toString().trim();
+              // ✅ studentId와 username 둘 다 키로 등록
+              if (sid) idToName[sid] = nm || sid;
+              if (uid) idToName[uid] = nm || uid;
+              // 이름 → 대표 id (없으면 username, 그것도 없으면 이름)
+              if (nm)  nameToId[nm]  = sid || uid || nm;
             });
           }catch(e){ /* 조용히 계속 */ }
         }
@@ -1181,6 +1185,7 @@
   </script>
 </body>
 </html>
+
 
 
 
