@@ -269,6 +269,8 @@
     
     function pickReasonForTarget(p, idx, rawTarget, sid, name){
       const norm = (s)=> (s||'').toString().trim().toLowerCase();
+      const rosterIdsNorm   = new Set(Object.keys(idToName).map(norm));                 // 학번/아이디 표준화 set
+      const rosterNamesNorm = new Set(Object.values(idToName).filter(Boolean).map(norm)); // 이름 표준화 set
       const candidates = [rawTarget, sid, name].filter(Boolean);
 
       // 1) 배열 인덱스 정렬형: reasons[idx]
@@ -885,7 +887,7 @@
                 sid = t;
                 nm  = idToName[t] || '';
               } else if (raw && typeof raw === 'object') {
-                sid = (raw.studentId || raw.username || '').toString().trim();
+                sid = (raw.studentId || raw.username || raw.id || '').toString().trim();
                 nm  = (raw.name || raw.studentName || '').toString().trim();
                 t   = nm || sid;
               } else {
@@ -902,8 +904,13 @@
 
               // 명부 필터
              if (rosterId){
-                const okById   = rosterIds.has(sid);
-                const okByName = rosterNames.has(t);
+                const tNorm   = norm(t);       // raw 문자열(이름/아이디 둘 중 하나일 수 있음)
+                const sidNorm = norm(sid);     // 우리가 해석한 id 후보
+
+                // 문자열이 이름으로도, 아이디로도 들어올 수 있으므로 둘 다 허용
+                const okById   = rosterIdsNorm.has(sidNorm) || rosterIdsNorm.has(tNorm);
+                const okByName = rosterNamesNorm.has(tNorm);
+
                 if (!okById && !okByName) return;
               }
               rosterPassCount++;
@@ -1203,6 +1210,7 @@
   </script>
 </body>
 </html>
+
 
 
 
