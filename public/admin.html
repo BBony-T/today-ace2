@@ -740,6 +740,8 @@
       const summaryBox = document.getElementById('summaryStats');
       resultBox.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">불러오는 중…</div>';
       summaryBox.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">불러오는 중…</div>';
+      const evals = await fetchAllEvaluationsForAdmin(tid);
+      console.log('[loadStatistics] evals length =', evals.length);
     
       try{
         const tid = await ensureTeacherId();
@@ -1147,6 +1149,7 @@
   </script>
 </body>
 </html>
+
 
 
 
