@@ -767,13 +767,13 @@
             });
           }catch(e){ /* 조용히 계속 */ }
         }
-        const rosterIds   = new Set(Object.keys(idToName));                   // 학번 set
-        const rosterNames = new Set(Object.values(idToName).filter(Boolean)); // 이름 set
+        const rosterIds   = new Set(Object.keys(idToName));
+        const rosterNames = new Set(Object.values(idToName).filter(Boolean));
 
-        // ✅ 추가 (여기! pickReasonForTarget 아님)
-        const norm = s => (s ?? '').toString().trim().toLowerCase();
-        const rosterIdsNorm   = new Set(Object.keys(idToName).map(norm));
-        const rosterNamesNorm = new Set(Object.values(idToName).filter(Boolean).map(norm));
+        // 정규화 함수 + 정규화 집합 추가
+        const norm = (s)=> (s ?? '').toString().trim().toLowerCase();
+        const rosterIdsNorm   = new Set(Array.from(rosterIds).map(norm));
+        const rosterNamesNorm = new Set(Array.from(rosterNames).map(norm));
     
         // 3) 전체 평가 가져오기(관리자 루트)  ← all=1 사용
         const evals = await fetchAllEvaluationsForAdmin(tid);
@@ -882,11 +882,15 @@
                 const tNorm   = norm(t);       // raw 문자열(이름/아이디 둘 중 하나일 수 있음)
                 const sidNorm = norm(sid);     // 우리가 해석한 id 후보
 
-                // 문자열이 이름으로도, 아이디로도 들어올 수 있으므로 둘 다 허용
-                const okById   = rosterIdsNorm.has(sidNorm) || rosterIdsNorm.has(tNorm);
-                const okByName = rosterNamesNorm.has(tNorm);
+                // 후보: 학번/아이디 후보(sid, raw t) + 이름 후보(nm, raw t)
+                const candIds   = [sid, t].map(norm);
+                const candNames = [nm,  t].map(norm);
 
-                if (!okById && !okByName) return;
+                const ok =
+                  candIds.some(x   => rosterIdsNorm.has(x)) ||
+                  candNames.some(x => rosterNamesNorm.has(x));
+
+                if (!ok) return;
               }
               rosterPassCount++;
     
@@ -1185,6 +1189,7 @@
   </script>
 </body>
 </html>
+
 
 
 
