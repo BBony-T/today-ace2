@@ -712,26 +712,27 @@
      
       
     // ✅ 관리자용 평가 전체 조회 (전부 가져오기: all=1)
+    // 관리자용 평가 전체 조회 (teacherId 기반, 다경로 시도)
     async function fetchAllEvaluationsForAdmin(tid) {
-      const tryFetch = async (url) => {
-        const j = await getJson(url);
-        return Array.isArray(j.evaluations) ? j.evaluations : (j.items || []);
-      };
-    
-      // 1) 기본: 관리자 전체 조회
-      try {
-        return await tryFetch(`/api/get-evaluations?all=1`);
-      } catch (_) {}
-    
-      // 2) 일부 배포에서 teacherId를 요구하는 경우 대비
-      try {
-        return await tryFetch(`/api/get-evaluations?all=1&teacherId=${encodeURIComponent(tid)}`);
-      } catch (_) {}
-    
-      // 3) 구버전 호환(열려있는 경우)
-      return await tryFetch(`/api/get-evaluations`);
-    }
+      const tries = [
+        `/api/admin/get-evaluations?teacherId=${encodeURIComponent(tid)}`, // 있으면 최우선
+        `/api/get-evaluations?teacherId=${encodeURIComponent(tid)}`,       // 루트 단수
+        `/api/get-evaluations?all=1`                                       // 전체 강제
+      ];
 
+      for (const url of tries) {
+        try {
+          const j = await getJson(url);
+          const arr = Array.isArray(j.evaluations) ? j.evaluations : (j.items || []);
+          console.log('[fetchAllEvaluationsForAdmin] url:', url, 'count:', arr?.length ?? 0);
+          if (arr && arr.length) return arr;
+        } catch (e) {
+          console.warn('[fetchAllEvaluationsForAdmin] fail:', url, e?.message || e);
+        }
+      }
+      return [];
+    }api/get-evaluations`);
+        }
 
     // ★★★ 통계 조회 구현
     async function loadStatistics(){
@@ -1146,6 +1147,7 @@
   </script>
 </body>
 </html>
+
 
 
 
