@@ -730,42 +730,53 @@
       for (const u of cand) {
         console.log('[fetchAllEvaluationsForAdmin] try:', u);
         const { ok, status, data, raw } = await safeFetchJson(u);
-        if (!ok) {
+       if (!ok) {
           console.warn('[get-evaluations] HTTP', status, data?.error || raw?.slice(0,120));
           continue;
         }
         // 다양한 스키마(evaluations/items/루트배열) 지원
         const arr =
           (Array.isArray(data?.evaluations) && data.evaluations) ||
-         (Array.isArray(data?.items) && data.items) ||
+          (Array.isArray(data?.items) && data.items) ||
           (Array.isArray(data) && data) ||
           [];
         console.log('[fetchAllEvaluationsForAdmin] got', arr.length, 'items from', u);
-        if (arr.length) return arr;   // 첫 성공을 채택
-        // 성공이지만 비어있으면 다음 후보도 시도 (환경마다 스키마 다를 수 있어서)
+        if (arr.length) return arr;  // 첫 성공 채택
+        // 성공이지만 비어있으면 다음 후보도 시도
       }
       console.warn('[fetchAllEvaluationsForAdmin] no data from all candidates. return []');
       return [];
     }
+    
+    async function safeFetchJson(url) {
+      try {
+        const r = await fetch(url, { credentials:'include', cache:'no-store' });
+        const raw = await r.clone().text();
+        let data = null; try { data = JSON.parse(raw); } catch {}
+        return { ok:r.ok, status:r.status, data, raw };
+      } catch (e) {
+        return { ok:false, status:0, data:null, raw:String(e||'') };
+      }
+    }
      
-    // ★★★ 통계 조회 구현
+    // ★★★ 통계 조회 구현  — [전체 교체]
     async function loadStatistics(){
       const resultBox = document.getElementById('statisticsResults');
       const summaryBox = document.getElementById('summaryStats');
       resultBox.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">불러오는 중…</div>';
       summaryBox.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">불러오는 중…</div>';
-      const evals = await fetchAllEvaluationsForAdmin(tid);
-      console.log('[loadStatistics] evals length =', evals.length);
     
       try{
+        // 0) teacherId 먼저 확보 (← 이전 ReferenceError 원인)
         const tid = await ensureTeacherId();
+    
         const rosterId = (document.getElementById('statsRosterSelect')?.value || '').trim();
         const fromStr  = (document.getElementById('startDate')?.value || '').trim();
         const toStr    = (document.getElementById('endDate')?.value || '').trim();
         const from = fromStr ? new Date(fromStr) : null;
         const to   = toStr   ? new Date(toStr)   : null;
     
-        // 0) 활동 맵 선조회(날짜→활동명)
+        // 1) 활동 맵(날짜→활동명) 선조회
         CURRENT_ACTIVITY_MAP = await getActivityMapFromServer({
           teacherId: tid,
           rosterId,
@@ -773,7 +784,7 @@
           end: toStr
         });
     
-        // 1) (선택) 명부 학생 목록 → 학번↔이름 매핑
+        // 2) (선택) 명부 학생 목록 → 학번↔이름 매핑
         const idToName = {};
         const nameToId = {};
         if (rosterId){
@@ -788,13 +799,28 @@
               if (id)  idToName[id] = nm || id;
               if (nm)  nameToId[nm] = id || nm;
             });
-          }catch(e){ /* 조용히 계속 진행 */ }
+          }catch(e){ /* 조용히 계속 */ }
         }
         const rosterIds   = new Set(Object.keys(idToName));                   // 학번 set
         const rosterNames = new Set(Object.values(idToName).filter(Boolean)); // 이름 set
     
-        // 2) 전체 평가 가져오기(관리자 루트)  ← 여기서 all=1 사용
+        // 3) 전체 평가 가져오기(관리자 루트)  ← all=1 사용
         const evals = await fetchAllEvaluationsForAdmin(tid);
+        // console.log('[loadStatistics] evals length =', Array.isArray(evals)?evals.length:-1);
+    
+        // 3-1) 데이터 없으면 즉시 종료(스피너 제거)
+        if (!Array.isArray(evals) || evals.length === 0) {
+         resultBox.innerHTML  = '<div style="text-align:center;color:#666;padding:20px;">데이터가 없습니다.</div>';
+          summaryBox.innerHTML = `
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;">
+              <div class="competency-stat"><span>총 추천 수</span><strong>0</strong></div>
+              <div class="competency-stat"><span>가장 많이 받은 역량</span><strong>-</strong></div>
+              <div class="competency-stat"><span>학생 수</span><strong>0</strong></div>
+            </div>
+            ${COMPETENCIES.map(c=>`<div class="competency-stat"><span>${c}</span><strong>0</strong></div>`).join('')}
+          `;
+          return;
+        }
     
         // 날짜 필터
         const inRange = (dstr)=>{
@@ -806,8 +832,7 @@
           return true;
         };
     
-       // 3) 집계: 학생별 { totals, reasons } 구조로
-        //   reasons: { '의사소통': [ {text, date, activity, from}, ... ], ... }
+        // 4) 집계: 학생별 { totals, reasons }
         const map = new Map(); // key: studentId(or 이름)
         const ensureRow = (sid, displayName)=>{
           const key = sid || displayName;
@@ -817,7 +842,7 @@
               studentId: sid || '',
               name: displayName || sid || '학생',
               totals,
-             reasons: {}
+              reasons: {}
             });
           }
           return map.get(key);
@@ -829,9 +854,9 @@
     
           const peer = Array.isArray(ev.peerEvaluations) ? ev.peerEvaluations : [];
           peer.forEach(p=>{
-           const comp = p.competency;
+            const comp = p.competency;
             if (!COMPETENCIES.includes(comp)) return;
-
+    
             // nominees(배열) 또는 name(단일) 모두 지원
             let targets = [];
             if (Array.isArray(p.nominees)) targets = p.nominees;
@@ -856,21 +881,21 @@
                 sid = t;
                 nm  = idToName[t] || '';
               }
-
+    
               // 명부 매핑 보정
               if (!nm && nameToId[t]) {
                 sid = nameToId[t];
                 nm  = idToName[sid] || t;
               }
-    
-              // 명부 필터: 선택된 명부가 있으면 명부 내 학생만 집계
-              if (rosterId){
+
+              // 명부 필터
+             if (rosterId){
                 const okById   = rosterIds.has(sid);
                 const okByName = rosterNames.has(t);
                 if (!okById && !okByName) return;
               }
     
-              // ✅ 대상자별 이유 선택(형식 혼합 지원)
+              // 대상자별 이유 선택
               let reasonText = '';
               if (reasonsArr && typeof reasonsArr[idx] === 'string') reasonText = reasonsArr[idx];
               else if (singleReason) reasonText = singleReason;
@@ -888,7 +913,7 @@
             });
           });
         });
-
+    
         const byStudent = Array.from(map.values()).sort(
           (a,b)=> (Object.values(b.totals||{}).reduce((x,y)=>x+(+y||0),0)) -
                   (Object.values(a.totals||{}).reduce((x,y)=>x+(+y||0),0)) ||
@@ -896,7 +921,7 @@
         );
         currentStatsData = byStudent;
     
-        // 4) 렌더링
+        // 5) 렌더링
         const resultBoxHtml = byStudent.length
           ? byStudent.map(st=>{
               const total = Object.values(st.totals||{}).reduce((a,b)=>a+(+b||0),0);
@@ -940,7 +965,6 @@
           '<div style="text-align:center;color:#c53030;padding:20px;">통계 조회 실패</div>';
       }
     }
-
 
     // 엑셀 다운로드
     function downloadExcel(){
@@ -1163,6 +1187,7 @@
   </script>
 </body>
 </html>
+
 
 
 
