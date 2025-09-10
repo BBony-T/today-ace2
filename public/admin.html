@@ -781,6 +781,35 @@
     
         // 3) 전체 평가 가져오기(관리자 루트)  ← all=1 사용
         const evals = await fetchAllEvaluationsForAdmin(tid);
+        // ───── [진단] 현재 범위 내 후보 타깃(대상자)들 모아보기 ─────
+        (function debugUniqueTargets() {
+          try {
+            const uniq = new Map(); // key -> count
+            const take = (v) => {
+              if (v == null) return;
+              if (typeof v === 'object') {
+                const sid = (v.studentId || v.username || '').toString().trim();
+                const nm  = (v.name || v.studentName || '').toString().trim();
+                const key = sid || nm || JSON.stringify(v);
+                uniq.set(key, (uniq.get(key)||0)+1);
+              } else {
+                const s = (''+v).trim();
+                if (!s) return;
+                uniq.set(s, (uniq.get(s)||0)+1);
+              }
+            };
+            evals.forEach(ev=>{
+              const peer = Array.isArray(ev.peerEvaluations) ? ev.peerEvaluations : [];
+              peer.forEach(p=>{
+                if (Array.isArray(p.nominees)) p.nominees.forEach(take);
+                else if (p.name) take(p.name);
+              });
+            });
+            const top = [...uniq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20);
+            console.log('[DEBUG] unique targets (top20)', top);
+          } catch(e){ console.warn('[DEBUG] unique targets fail:', e); }
+        })();
+
         // console.log('[loadStatistics] evals length =', Array.isArray(evals)?evals.length:-1);
         const rawCount = Array.isArray(evals) ? evals.length : 0;
         let inRangeCount = 0;
@@ -839,7 +868,38 @@
           }
           return map.get(key);
         };
-    
+        function extractTargetsFromPeer(p) {
+          if (Array.isArray(p.nominees)) return p.nominees;
+          if (p.name) return [p.name];
+          if (Array.isArray(p.targets)) return p.targets; // 혹시 다른 키로 들어오는 경우 대비
+          if (p.target) return [p.target];
+          return [];
+        }
+
+        function asIdName(raw, idToName) {
+          // 객체형: {studentId|username, name|studentName}
+          if (raw && typeof raw === 'object') {
+           return {
+              sid: (raw.studentId || raw.username || '').toString().trim(),
+              nm : (raw.name || raw.studentName || '').toString().trim(),
+              raw: raw
+            };
+          }
+          // 문자열형
+          const s = (raw||'').toString().trim();
+          // 패턴: "이태리(10101)" 또는 "10101(이태리)"
+          let m = s.match(/^(.+?)\((\d{3,})\)$/); // "이름(학번)" 형태
+          if (m) return { sid: m[2].trim(), nm: m[1].trim(), raw: s };
+          m = s.match(/^(\d{3,})\((.+?)\)$/);      // "학번(이름)" 형태
+          if (m) return { sid: m[1].trim(), nm: m[2].trim(), raw: s };
+          // 그냥 학번 또는 그냥 이름일 수 있음
+          return {
+            sid: s,
+            nm : idToName[s] || s,
+            raw: s
+          };
+        }
+     
         evals.forEach(ev=>{
           const dateStr = dateKey(ev.date || ev.timestamp);
           if (!inRange(dateStr)) return;
@@ -854,52 +914,39 @@
             let targets = [];
             if (Array.isArray(p.nominees)) targets = p.nominees;
             else if (p.name) targets = [p.name];
+
+            const targets = extractTargetsFromPeer(p);  // ✅ 통합 추출
     
             const reasonsArr   = Array.isArray(p.reasons) ? p.reasons : null; // nominees와 index 매칭
             const singleReason = p.reason || null;
     
             targets.forEach((raw, idx)=>{
-              // raw가 문자열 또는 {name, studentId} 같은 객체일 수 있음 → 정규화
-              let t  = '', sid = '', nm = '';
-              if (typeof raw === 'string') {
-                t   = raw.trim();
-                sid = t;
-                nm  = idToName[t] || '';
-              } else if (raw && typeof raw === 'object') {
-                sid = (raw.studentId || raw.username || raw.id || '').toString().trim();
-                nm  = (raw.name || raw.studentName || '').toString().trim();
-                t   = nm || sid;
-              } else {
-                t = String(raw || '').trim();
-                sid = t;
-                nm  = idToName[t] || '';
-              }
-    
+             const { sid: _sid, nm: _nm, raw: _raw } = asIdName(raw, idToName);  // ✅ 통합 정규화
+             let sid = _sid, nm = _nm, t = (typeof _raw==='string'? _raw : (_nm || _sid));
+
               // 명부 매핑 보정
               if (!nm && nameToId[t]) {
                 sid = nameToId[t];
                 nm  = idToName[sid] || t;
               }
 
-              // 명부 필터
-             if (rosterId){
-                const tNorm   = norm(t);       // raw 문자열(이름/아이디 둘 중 하나일 수 있음)
-                const sidNorm = norm(sid);     // 우리가 해석한 id 후보
+              // ── 명부 필터(선택 시) : 표준화 set로 느슨하게 체크
+              const n = s => (s||'').toString().trim().toLowerCase();
+              // ── 명부 필터(선택 시) : 표준화 set로 느슨하게 체크
+              if (rosterId){
+                const sidN = norm(sid);
+                const tN   = norm(t);
+                const nmN  = norm(nm);
 
-                // 후보: 학번/아이디 후보(sid, raw t) + 이름 후보(nm, raw t)
-                const candIds   = [sid, t].map(norm);
-                const candNames = [nm,  t].map(norm);
-
-                const ok =
-                  candIds.some(x   => rosterIdsNorm.has(x)) ||
-                  candNames.some(x => rosterNamesNorm.has(x));
-
-                if (!ok) return;
-                rosterPassCount++;
-              } else {
-                // 명부 선택은 있었지만 학생셋이 비면 임시로 필터 미적용 (원인 파악용)
-                rosterPassCount++;
+                // 학번/아이디(sid 또는 raw t) OR 이름(nm 또는 raw t) 중 하나라도 명부에 있으면 통과
+                if (!rosterIdsNorm.has(sidN) &&
+                    !rosterNamesNorm.has(tN) &&
+                    !rosterNamesNorm.has(nmN)) {
+                  return;            // 매칭 실패 → 스킵
+                }
+                rosterPassCount++;   // 매칭 성공 건수 카운트
               }
+              // ※ rosterId가 비어(‘전체’)면 필터 미적용. else에서 카운트를 올리지 마세요.
     
               // 대상자별 이유 선택
               let reasonText = '';
@@ -1196,6 +1243,7 @@
   </script>
 </body>
 </html>
+
 
 
 
