@@ -807,6 +807,23 @@
         // 3) 전체 평가 가져오기(관리자 루트)  ← all=1 사용
         const evals = await fetchAllEvaluationsForAdmin(tid);
         // console.log('[loadStatistics] evals length =', Array.isArray(evals)?evals.length:-1);
+        const rawCount = Array.isArray(evals) ? evals.length : 0;
+        let inRangeCount = 0;
+        let rosterPassCount = 0;
+
+        // 데이터 0건이면 즉시 종료
+        if (!rawCount) {
+          resultBox.innerHTML  = '<div style="text-align:center;color:#666;padding:20px;">데이터가 없습니다. (원본 0건)</div>';
+          summaryBox.innerHTML = `
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;">
+              <div class="competency-stat"><span>총 추천 수</span><strong>0</strong></div>
+              <div class="competency-stat"><span>가장 많이 받은 역량</span><strong>-</strong></div>
+              <div class="competency-stat"><span>학생 수</span><strong>0</strong></div>
+            </div>
+            ${COMPETENCIES.map(c=>`<div class="competency-stat"><span>${c}</span><strong>0</strong></div>`).join('')}
+          `;
+          return;
+        }
     
         // 3-1) 데이터 없으면 즉시 종료(스피너 제거)
         if (!Array.isArray(evals) || evals.length === 0) {
@@ -851,6 +868,7 @@
         evals.forEach(ev=>{
           const dateStr = dateKey(ev.date || ev.timestamp);
           if (!inRange(dateStr)) return;
+          inRangeCount++;
     
           const peer = Array.isArray(ev.peerEvaluations) ? ev.peerEvaluations : [];
           peer.forEach(p=>{
@@ -894,6 +912,7 @@
                 const okByName = rosterNames.has(t);
                 if (!okById && !okByName) return;
               }
+              rosterPassCount++;
     
               // 대상자별 이유 선택
               let reasonText = '';
@@ -1187,6 +1206,7 @@
   </script>
 </body>
 </html>
+
 
 
 
