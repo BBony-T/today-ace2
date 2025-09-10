@@ -709,30 +709,36 @@
       return '';
     }
      
-     
-      
-    // ✅ 관리자용 평가 전체 조회 (전부 가져오기: all=1)
-    // 관리자용 평가 전체 조회 (teacherId 기반, 다경로 시도)
+    // 관리자용 평가 조회 (존재하는 루트 엔드포인트만 시도)
     async function fetchAllEvaluationsForAdmin(tid) {
-      const tries = [
-        `/api/admin/get-evaluations?teacherId=${encodeURIComponent(tid)}`, // 있으면 최우선
-        `/api/get-evaluations?teacherId=${encodeURIComponent(tid)}`,       // 루트 단수
-        `/api/get-evaluations?all=1`                                       // 전체 강제
-      ];
-
-      for (const url of tries) {
+      async function tryGet(url) {
         try {
-          const j = await getJson(url);
-          const arr = Array.isArray(j.evaluations) ? j.evaluations : (j.items || []);
-          console.log('[fetchAllEvaluationsForAdmin] url:', url, 'count:', arr?.length ?? 0);
-          if (arr && arr.length) return arr;
-        } catch (e) {
-          console.warn('[fetchAllEvaluationsForAdmin] fail:', url, e?.message || e);
+          const r = await fetch(url, { credentials:'include', cache:'no-store' });
+          let j = {};
+          try { j = await r.clone().json(); } catch {}
+          if (!r.ok) throw new Error(j?.error || r.statusText || `HTTP ${r.status}`);
+    
+          // 다양한 스키마 허용: evaluations / items / 루트 배열
+          const arr =
+            (Array.isArray(j?.evaluations) && j.evaluations) ||
+            (Array.isArray(j?.items) && j.items) ||
+            (Array.isArray(j) && j) ||
+            [];
+          return arr;
+        } catch {
+          return null;
         }
       }
-      return [];
-    }api/get-evaluations`);
-        }
+
+      // 루트만 사용 (존재 확인된 경로)
+      return (
+        (await tryGet(`/api/get-evaluations?all=1&teacherId=${encodeURIComponent(tid)}`)) ||
+        (await tryGet('/api/get-evaluations?all=1')) ||
+        (await tryGet(`/api/get-evaluations?teacherId=${encodeURIComponent(tid)}`)) ||
+        (await tryGet('/api/get-evaluations')) ||
+        []
+      );
+    }
 
     // ★★★ 통계 조회 구현
     async function loadStatistics(){
@@ -1149,6 +1155,7 @@
   </script>
 </body>
 </html>
+
 
 
 
