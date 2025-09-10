@@ -909,11 +909,6 @@
           peer.forEach(p=>{
             const comp = p.competency;
             if (!COMPETENCIES.includes(comp)) return;
-    
-            // nominees(배열) 또는 name(단일) 모두 지원
-            let targets = [];
-            if (Array.isArray(p.nominees)) targets = p.nominees;
-            else if (p.name) targets = [p.name];
 
             const targets = extractTargetsFromPeer(p);  // ✅ 통합 추출
     
@@ -930,8 +925,6 @@
                 nm  = idToName[sid] || t;
               }
 
-              // ── 명부 필터(선택 시) : 표준화 set로 느슨하게 체크
-              const n = s => (s||'').toString().trim().toLowerCase();
               // ── 명부 필터(선택 시) : 표준화 set로 느슨하게 체크
               if (rosterId){
                 const sidN = norm(sid);
@@ -1243,6 +1236,7 @@
   </script>
 </body>
 </html>
+
 
 
 
