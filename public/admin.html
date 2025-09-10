@@ -955,7 +955,10 @@
                   </div>
                 </div>`;
           }).join('')
-          : '<div style="text-align:center;color:#666;padding:20px;">데이터가 없습니다.</div>';
+          : `<div style="text-align:center;color:#666;padding:20px;">
+               데이터가 없습니다.<br>
+               <small>(원본: ${rawCount}건, 기간 통과: ${inRangeCount}건, 명부/이름 매칭: ${rosterId ? rosterPassCount : '—'}건)</small>
+             </div>';
         resultBox.innerHTML = resultBoxHtml;
     
         // 전체 요약
@@ -1206,6 +1209,7 @@
   </script>
 </body>
 </html>
+
 
 
 
