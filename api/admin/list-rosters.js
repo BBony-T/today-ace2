@@ -1,66 +1,95 @@
 // /api/admin/list-rosters.js
-import { db } from '../_fb.js';
-import { getUserFromReq } from '../_shared/initAdmin.js';
-import admin from 'firebase-admin';
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+
+// --- Admin init (공통)
+function getDB() {
+  if (!getApps().length) {
+    const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON missing');
+    initializeApp({ credential: cert(JSON.parse(raw)) });
+  }
+  return getFirestore();
+}
 
 export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'GET')
+    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+
   try {
-    if (req.method !== 'GET') {
-      return res.status(405).json({ success:false, error:'Method Not Allowed' });
+    const teacherId = (req.query.teacherId || '').toString().trim();
+    if (!teacherId) {
+      return res.status(400).json({ success: false, error: 'teacherId required' });
     }
 
-    const me = getUserFromReq(req);
-    // 로그인 미연결 개발 단계면 아래 2줄 주석 해제 금지
-    // if (!me || (me.role !== 'teacher' && me.role !== 'super')) {
-    //   return res.status(401).json({ success:false, error:'로그인 필요' });
-    // }
+    const db = getDB();
 
-    const teacherId =
-      (me && (me.role === 'super' && req.query.teacherId ? req.query.teacherId : (me.teacherId || me.uid)))
-      || req.query.teacherId
-      || 'T_DEFAULT';
-
-    // 현황판에 노출 중인 rosterIds
-    const boardDoc = await db().collection('boards').doc(teacherId).get();
-    const activeIds = boardDoc.exists ? (boardDoc.data().activeRosterIds || []) : [];
-
-    const snap = await db()
+    // 1) rosters 컬렉션 우선 조회
+    const metaSnap = await db
       .collection('rosters')
       .where('teacherId', '==', teacherId)
       .orderBy('createdAt', 'desc')
       .get();
 
-    const rosters = [];
-    for (const d of snap.docs) {
-      const r = d.data();
+    let rosters = [];
+    metaSnap.forEach(doc => {
+      const d = doc.data() || {};
+      rosters.push({
+        id: doc.id,
+        teacherId: d.teacherId,
+        title: d.title || d.categoryName || '무제 명부',
+        categoryType: d.categoryType || '',
+        categoryName: d.categoryName || d.title || '',
+        itemCount: d.itemCount ?? 0,
+        active: !!d.active,
+        createdAt: d.createdAt?.toDate?.()?.toISOString?.() || null,
+      });
+    });
 
-      // 학생 수 집계(aggregate count). SDK v12 이상에서 동작
-      const agg = await db()
+    // 2) 메타 없으면 students에서 집계 (fallback)
+    if (!rosters.length) {
+      const stuSnap = await db
         .collection('students')
         .where('teacherId', '==', teacherId)
-        .where('rosterId', '==', d.id)
-        .count()
         .get();
 
-      const itemCount = agg.data().count || 0;
-
-      rosters.push({
-        id: d.id,
-        teacherId,
-        type: r.type || 'roster',
-        title: r.title || r.name || '무제 명부',
-        itemCount,
-        createdAt: r.createdAt || admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: r.updatedAt || r.createdAt || admin.firestore.FieldValue.serverTimestamp(),
-        active: activeIds.includes(d.id),
-        published: !!r.published,
+      const byRoster = new Map(); // rosterId -> {count, name,type}
+      stuSnap.forEach(doc => {
+        const s = doc.data() || {};
+        const rid = (s.rosterId || '').toString();
+        if (!rid) return;
+        const entry = byRoster.get(rid) || {
+          count: 0,
+          categoryName: s.subject || s.club || '',
+          categoryType: s.subject ? 'subject' : (s.club ? 'club' : ''),
+        };
+        entry.count += 1;
+        // 제목은 최대한 의미있게
+        if (!entry.categoryName) {
+          entry.categoryName = s.subject || s.club || '';
+        }
+        byRoster.set(rid, entry);
       });
+
+      rosters = [...byRoster.entries()].map(([id, v]) => ({
+        id,
+        teacherId,
+        title: v.categoryName || '무제 명부',
+        categoryType: v.categoryType,
+        categoryName: v.categoryName,
+        itemCount: v.count,
+        active: false,
+        createdAt: null,
+      }));
     }
 
-    res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json({ success:true, rosters });
+    return res.status(200).json({ success: true, rosters });
   } catch (e) {
-    console.error('[list-rosters] error', e);
-    return res.status(500).json({ success:false, error: e?.message || 'server error' });
+    console.error('[list-rosters] error:', e);
+    return res.status(500).json({ success: false, error: 'server error' });
   }
 }
