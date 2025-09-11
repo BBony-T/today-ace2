@@ -771,13 +771,22 @@
             console.warn('[stats] list-students fail:', e);
           }
         }
-        const rosterIds   = new Set(Object.keys(idToName));
-        const rosterNames = new Set(Object.values(idToName).filter(Boolean));
+        // ▼ 정규화 헬퍼 (이름/학번 포맷 차이를 최대한 흡수)
+        const normName = (s) =>
+          (s ?? '')
+            .toString()
+            .normalize('NFC')        // 한글 정규화
+            .replace(/\s+/g, '')     // 공백 제거
+            .toLowerCase();
 
-        // 정규화 함수 + 정규화 집합 추가
-        const norm = (s)=> (s ?? '').toString().trim().toLowerCase();
-        const rosterIdsNorm   = new Set(Array.from(rosterIds).map(norm));
-        const rosterNamesNorm = new Set(Array.from(rosterNames).map(norm));
+        const normId = (s) =>
+          (s ?? '')
+            .toString()
+            .replace(/\D+/g, '');    // 숫자만 남김 (10101, 10101번, 10101-1 → 101011 등)
+
+        // 명부 기준 Set (정규화 버전)
+        const rosterIdsNorm   = new Set(Object.keys(idToName).map(normId).filter(Boolean));
+        const rosterNamesNorm = new Set(Object.values(idToName).map(normName).filter(Boolean));
     
         // 3) 전체 평가 가져오기(관리자 루트)  ← all=1 사용
         const evals = await fetchAllEvaluationsForAdmin(tid);
@@ -869,42 +878,45 @@
           return map.get(key);
         };
         function extractTargetsFromPeer(p) {
-          const toArr = (v) => (Array.isArray(v) ? v : (v == null ? [] : [v]));
-          // 다양한 키 이름을 모두 수용
-          return [
-            ...toArr(p.nominees),
-            ...toArr(p.targets),
-            ...toArr(p.target),
-            ...toArr(p.nomineeIds),
-            ...toArr(p.nominee)
-          ].filter(v => v != null && v !== '');
+          if (Array.isArray(p.nominees) && p.nominees.length) return p.nominees;
+          if (Array.isArray(p.targets)  && p.targets.length)  return p.targets;
+          if (Array.isArray(p.targetNames) && p.targetNames.length) return p.targetNames;
+          if (p.targetId)   return [{ studentId: p.targetId, name: p.targetName || p.name || '' }];
+          if (p.name || p.target || p.targetName || p.nominee)
+            return [p.name || p.target || p.targetName || p.nominee];
+          return [];
         }
 
         function asIdName(raw, idToName) {
-          // 객체형: {studentId|username|id|uid, name|studentName|displayName}
+          // 객체형: {studentId|username, name|studentName, targetId|targetName ...}
           if (raw && typeof raw === 'object') {
-            const sid = (raw.studentId || raw.username || raw.id || raw.uid || '').toString().trim();
-            const nm  = (raw.name || raw.studentName || raw.displayName || '').toString().trim();
-            return { sid, nm: nm || idToName[sid] || '', raw };
+            const sid =
+              (raw.studentId || raw.username || raw.targetId || '').toString().trim();
+            const nm  =
+              (raw.name || raw.studentName || raw.targetName || '').toString().trim();
+            return { sid, nm, raw };
           }
 
           // 문자열형
-          const s = (raw || '').toString().trim();
-          let sid = '', nm = '';
-          // "이름(학번)" 형태
-          let m = s.match(/^(.+?)\(([^)]+)\)$/);
-          if (m) { nm = m[1].trim(); sid = m[2].trim(); }
-          else {
-            // "학번(이름)" 형태 (학번은 영숫자/언더스코어/하이픈 허용)
-            m = s.match(/^([0-9A-Za-z_-]+)\((.+?)\)$/);
-            if (m) { sid = m[1].trim(); nm = m[2].trim(); }
-            else {
-              // 그냥 학번 또는 그냥 이름
-              sid = s;
-              nm  = idToName[s] || '';
-            }
+          const s = (raw ?? '').toString().trim();
+
+          // 1) "이름(10101)" / "10101(이름)" / "이름 10101" 등 → 숫자 먼저 추출
+          const idMatch = s.match(/(\d{3,})/); // 3자리 이상 숫자
+          if (idMatch) {
+            const sid = idMatch[1];
+            // 괄호 안/밖, 공백/기호를 제거한 이름 후보
+            const nameCand = s
+              .replace(/[()]/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+            // 숫자부분 제거하고 남는 텍스트가 있으면 그걸 이름으로 시도
+            const nm = nameCand.replace(sid, '').replace(/\d+/g, '').trim();
+            return { sid, nm, raw: s };
           }
-          return { sid, nm, raw: s };
+
+          // 2) 순수 이름으로만 온 경우 → idToName 역매핑으로 보정 시도
+          const nm = s;
+          return { sid: (nameToId[nm] || ''), nm, raw: s };
         }
      
         evals.forEach(ev=>{
@@ -932,19 +944,21 @@
                 nm  = idToName[sid] || t;
               }
 
-              // ── 명부 필터(선택 시) : 표준화 set로 느슨하게 체크
-              if (rosterId){
-                const sidN = norm(sid);
-                const tN   = norm(t);
-                const nmN  = norm(nm);
+              // ── 명부 필터(선택 시) : id 또는 이름 둘 중 하나라도 맞으면 통과
+              if (rosterId) {
+                const sidN = normId(sid);
+                const tIdN = normId(t);
+                const nmN  = normName(nm);
+                const tNmN = normName(t);
 
-                // 학번/아이디(sid 또는 raw t) OR 이름(nm 또는 raw t) 중 하나라도 명부에 있으면 통과
-                if (!rosterIdsNorm.has(sidN) &&
-                    !rosterNamesNorm.has(tN) &&
-                    !rosterNamesNorm.has(nmN)) {
-                  return;            // 매칭 실패 → 스킵
-                }
-                rosterPassCount++;   // 매칭 성공 건수 카운트
+                const ok =
+                  (sidN && rosterIdsNorm.has(sidN)) ||
+                  (tIdN && rosterIdsNorm.has(tIdN)) ||
+                  (nmN  && rosterNamesNorm.has(nmN)) ||
+                  (tNmN && rosterNamesNorm.has(tNmN));
+
+                if (!ok) return;   // 매칭 실패
+                rosterPassCount++; // 매칭 성공
               }
               // ※ rosterId가 비어(‘전체’)면 필터 미적용. else에서 카운트를 올리지 마세요.
     
@@ -1243,6 +1257,7 @@
   </script>
 </body>
 </html>
+
 
 
 
