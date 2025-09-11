@@ -83,10 +83,13 @@ export default async function handler(req, res) {
       });
     });
 
-    // ── 필터링 ─────────────────────────────────────────────────
+    // 🔧 1) 스키마 노말라이징 (프론트가 기대하는 형태로 통일)
+    const normalized = normalizeEvaluations(list);
+
+    // 🔎 2) 기존 필터 로직 재사용
     const filtered = isAdminMode
-      ? filterEvaluationsForAdmin(list, { startDate, endDate, evaluationType, targetUsername })
-      : filterEvaluationsForStudent(list, { targetUsername, startDate, endDate, evaluationType });
+      ? filterEvaluationsForAdmin(normalized, { startDate, endDate, evaluationType, targetUsername })
+      : filterEvaluationsForStudent(normalized, { targetUsername, startDate, endDate, evaluationType });
 
     return res.status(200).json({
       success: true,
@@ -96,7 +99,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('get-evaluations error:', error?.message || error);
-    // 프로덕션에서는 더미 절대 금지: 명확히 에러로 응답
     return res.status(500).json({
       success: false,
       error: 'DB 초기화/조회 실패'
@@ -114,6 +116,83 @@ function inDateRange(recDate, startDate, endDate) {
   if (startDate && recDate < startDate) return false;
   if (endDate   && recDate > endDate)   return false;
   return true;
+}
+
+/** 문자열 안전 변환 */
+function asStr(v) {
+  return (v ?? '').toString().trim();
+}
+
+/** peerEvaluation 1건을 통일 스키마로 변환 */
+function normalizePeer(pe) {
+  if (!pe || typeof pe !== 'object') return null;
+
+  const competency = asStr(pe.competency);
+
+  // nominees 통일: 가장 신뢰도 높은 식별자 순으로 선택
+  // 1) targetStudentId / targetUsername(=username) / targetName
+  // 2) target 객체 형태 {studentId|username|name}
+  // 3) 기존 nominees(string|array) 그대로
+  let nominee = '';
+
+  const cand = [
+    asStr(pe.targetStudentId),
+    asStr(pe.targetUsername),
+    asStr(pe.targetName)
+  ];
+
+  if (!cand[0] && !cand[1] && !cand[2]) {
+    const tgt = pe.target || pe.nominee || null; // 혹시 다른 키로 들어온 경우
+    if (tgt && typeof tgt === 'object') {
+      cand.push(asStr(tgt.studentId), asStr(tgt.username), asStr(tgt.name));
+    }
+  }
+
+  nominee = cand.find(s => !!s) || '';
+
+  // 기존 nominees가 배열/문자열로 온 경우도 처리
+  let nominees = [];
+  if (Array.isArray(pe.nominees)) {
+    nominees = pe.nominees.map(asStr).filter(Boolean);
+  } else if (asStr(pe.nominees)) {
+    nominees = [asStr(pe.nominees)];
+  }
+
+  if (!nominees.length && nominee) nominees = [nominee];
+
+  // reasons 통일 (단일/배열 모두 허용)
+  let reasons = [];
+  if (Array.isArray(pe.reasons)) {
+    reasons = pe.reasons.map(asStr).filter(Boolean);
+  } else if (asStr(pe.reason)) {
+    reasons = [asStr(pe.reason)];
+  }
+
+  // competency가 비어 있거나 nominees가 비면 무시
+  if (!competency || !nominees.length) return null;
+
+  return { competency, nominees, reasons };
+}
+
+/** 문서 단위 통일: peerEvaluations를 [{competency, nominees:[...], reasons:[...]}]로 보장 */
+function normalizeEvaluations(list) {
+  return (list || []).map(e => {
+    const out = { ...e };
+
+    const rawPeers =
+      Array.isArray(e.peerEvaluations) ? e.peerEvaluations :
+      Array.isArray(e.peers) ? e.peers : // 혹시 다른 키로 저장된 경우 대비
+      [];
+
+    const normPeers = rawPeers
+      .map(normalizePeer)
+      .filter(Boolean);
+
+    out.peerEvaluations = normPeers;
+
+    // selfEvaluation은 현재 통계 로직에 영향 없음(필요 시 확장)
+    return out;
+  });
 }
 
 /** 관리자 모드 필터링 */
