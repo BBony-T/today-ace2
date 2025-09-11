@@ -1,6 +1,6 @@
-// /api/admin/import-students.js
+// 변경 후
 import { getDB } from '../../lib/admin.js';
-import admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore'; // serverTimestamp용
 
 function normId(v = '') {
   // 학번: 문자열화 + 앞뒤 공백 제거 (선행 0 보존)
