@@ -267,29 +267,83 @@
       return `${d.getFullYear()}-${mm}-${dd}`;
     }
       
-    /* ───────── teacherId 확보 ───────── */
-    let TEACHER_ID =
-      sessionStorage.getItem('teacherId') ||
-      sessionStorage.getItem('username') || '';
+    // ───────── Teacher ID: Single Source of Truth ─────────
+    let TEACHER_ID = null;
+    let _whoamiPromise = null;
 
-    let _whoamiOnce = null;
-    async function ensureTeacherId() {
-      if (TEACHER_ID) return TEACHER_ID;
-      if (!_whoamiOnce) {
-        _whoamiOnce = fetch('/api/auth/whoami', { credentials:'include', cache:'no-store' })
-        .then(async (r)=>{ if(!r.ok) throw 0; const j=await r.json();
-          TEACHER_ID = j?.teacherId || j?.uid || j?.email || 'T_DEFAULT';
-          sessionStorage.setItem('teacherId', TEACHER_ID);
-          return TEACHER_ID;
-        })
-        .catch(()=> {
-          TEACHER_ID = sessionStorage.getItem('teacherId') || sessionStorage.getItem('username') || 'T_DEFAULT';
-          return TEACHER_ID;
-        });
-      }
-      return _whoamiOnce;
+    // session/localStorage에서 먼저 시도
+    function readTeacherIdFromStorage() {
+      try {
+        // 로그인 직후 저장해둔 값 우선
+        const s = sessionStorage.getItem('teacherId');
+        if (s) return s;
+
+        // 선택: 로그인 로직에서 저장한 로컬 프로필
+        const raw = localStorage.getItem('teacherProfile');
+        if (raw) {
+          const p = JSON.parse(raw);
+          return p.id || p.teacherId || p.uid || p.email || '';
+        }
+      } catch {}
+      return '';
     }
-    function getTeacherId(){ return TEACHER_ID || 'T_DEFAULT'; }
+
+    async function ensureTeacherId() {
+      // 1) 메모리
+      if (TEACHER_ID) return TEACHER_ID;
+
+      // 2) 저장소
+      const fromStorage = readTeacherIdFromStorage();
+      if (fromStorage) {
+        TEACHER_ID = fromStorage;
+        sessionStorage.setItem('teacherId', TEACHER_ID);
+        return TEACHER_ID;
+      }
+
+      // 3) 서버 whoami (쿠키 기반)
+      if (!_whoamiPromise) {
+        _whoamiPromise = fetch('/api/auth/whoami', {
+          credentials: 'include',
+          cache: 'no-store'
+        })
+          .then(r => r.ok ? r.json() : Promise.reject())
+          .then(j => {
+            TEACHER_ID = j?.teacherId || j?.id || j?.uid || j?.email || '';
+            if (!TEACHER_ID) throw new Error('교사 식별자를 가져오지 못했습니다.');
+            sessionStorage.setItem('teacherId', TEACHER_ID);
+
+            // 선택: 서버에서 받은 프로필을 로컬에 동기화
+            if (j?.teacher) {
+              try {
+                localStorage.setItem('teacherProfile', JSON.stringify({ id: TEACHER_ID, ...j.teacher }));
+              } catch {}
+            }
+            return TEACHER_ID;
+          })
+          .catch(() => {
+            throw new Error('로그인 정보를 확인할 수 없습니다. 다시 로그인해 주세요.');
+          });
+      }
+      return _whoamiPromise;
+    }
+
+    function getTeacherId() {
+      if (TEACHER_ID) return TEACHER_ID;
+      const fromStorage = readTeacherIdFromStorage();
+      if (fromStorage) {
+        TEACHER_ID = fromStorage;
+        return TEACHER_ID;
+      }
+      // 더미/기본값 금지: 확실히 막아야 다른 계정 데이터와 섞이지 않음
+      throw new Error('teacherId 미확정 상태에서 호출되었습니다. ensureTeacherId()를 먼저 호출하세요.');
+    }
+
+    // 로그아웃 시 호출 (캐시 정리)
+    function clearTeacherCache() {
+      TEACHER_ID = null;
+      sessionStorage.removeItem('teacherId');
+      localStorage.removeItem('teacherProfile');
+    }
 
     /* ───────── 페이지 전환 ───────── */
     function showPage(pageType, el){
@@ -1257,6 +1311,7 @@
   </script>
 </body>
 </html>
+
 
 
 
