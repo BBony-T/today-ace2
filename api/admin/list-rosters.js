@@ -1,24 +1,15 @@
 // /api/admin/list-rosters.js
-import { getApps, initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-
-// --- Admin init (공통)
-function getDB() {
-  if (!getApps().length) {
-    const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON missing');
-    initializeApp({ credential: cert(JSON.parse(raw)) });
-  }
-  return getFirestore();
-}
+import { getDB } from '../../lib/admin.js';
 
 export default async function handler(req, res) {
+  // CORS (필요시)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET')
+  if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+  }
 
   try {
     const teacherId = (req.query.teacherId || '').toString().trim();
@@ -28,68 +19,33 @@ export default async function handler(req, res) {
 
     const db = getDB();
 
-    // 1) rosters 컬렉션 우선 조회
-    const metaSnap = await db
-      .collection('rosters')
+    // ⚠️ 인덱스 이슈 피하려고 orderBy는 쓰지 않고, 가져온 뒤 JS에서 정렬
+    const snap = await db.collection('rosters')
       .where('teacherId', '==', teacherId)
-      .orderBy('createdAt', 'desc')
       .get();
 
-    let rosters = [];
-    metaSnap.forEach(doc => {
+    const rosters = [];
+    snap.forEach(doc => {
       const d = doc.data() || {};
       rosters.push({
-        id: doc.id,
-        teacherId: d.teacherId,
+        id: d.id || doc.id,
+        teacherId: d.teacherId || '',
         title: d.title || d.categoryName || '무제 명부',
         categoryType: d.categoryType || '',
         categoryName: d.categoryName || d.title || '',
-        itemCount: d.itemCount ?? 0,
-        active: !!d.active,
-        createdAt: d.createdAt?.toDate?.()?.toISOString?.() || null,
+        itemCount: d.itemCount ?? d.count ?? 0,
+        active: !!(d.active || d.published),
+        createdAt: d.createdAt?.toDate?.()?.toISOString?.() || '',
+        updatedAt: d.updatedAt?.toDate?.()?.toISOString?.() || '',
       });
     });
 
-    // 2) 메타 없으면 students에서 집계 (fallback)
-    if (!rosters.length) {
-      const stuSnap = await db
-        .collection('students')
-        .where('teacherId', '==', teacherId)
-        .get();
-
-      const byRoster = new Map(); // rosterId -> {count, name,type}
-      stuSnap.forEach(doc => {
-        const s = doc.data() || {};
-        const rid = (s.rosterId || '').toString();
-        if (!rid) return;
-        const entry = byRoster.get(rid) || {
-          count: 0,
-          categoryName: s.subject || s.club || '',
-          categoryType: s.subject ? 'subject' : (s.club ? 'club' : ''),
-        };
-        entry.count += 1;
-        // 제목은 최대한 의미있게
-        if (!entry.categoryName) {
-          entry.categoryName = s.subject || s.club || '';
-        }
-        byRoster.set(rid, entry);
-      });
-
-      rosters = [...byRoster.entries()].map(([id, v]) => ({
-        id,
-        teacherId,
-        title: v.categoryName || '무제 명부',
-        categoryType: v.categoryType,
-        categoryName: v.categoryName,
-        itemCount: v.count,
-        active: false,
-        createdAt: null,
-      }));
-    }
+    // 최신순 정렬(업데이트 없으면 생성일 기준)
+    rosters.sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
 
     return res.status(200).json({ success: true, rosters });
   } catch (e) {
     console.error('[list-rosters] error:', e);
-    return res.status(500).json({ success: false, error: 'server error' });
+    return res.status(500).json({ success: false, error: e?.message || 'server error' });
   }
 }
