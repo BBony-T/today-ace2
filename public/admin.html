@@ -869,35 +869,42 @@
           return map.get(key);
         };
         function extractTargetsFromPeer(p) {
-          if (Array.isArray(p.nominees)) return p.nominees;
-          if (p.name) return [p.name];
-          if (Array.isArray(p.targets)) return p.targets; // 혹시 다른 키로 들어오는 경우 대비
-          if (p.target) return [p.target];
-          return [];
+          const toArr = (v) => (Array.isArray(v) ? v : (v == null ? [] : [v]));
+          // 다양한 키 이름을 모두 수용
+          return [
+            ...toArr(p.nominees),
+            ...toArr(p.targets),
+            ...toArr(p.target),
+            ...toArr(p.nomineeIds),
+            ...toArr(p.nominee)
+          ].filter(v => v != null && v !== '');
         }
 
         function asIdName(raw, idToName) {
-          // 객체형: {studentId|username, name|studentName}
+          // 객체형: {studentId|username|id|uid, name|studentName|displayName}
           if (raw && typeof raw === 'object') {
-           return {
-              sid: (raw.studentId || raw.username || '').toString().trim(),
-              nm : (raw.name || raw.studentName || '').toString().trim(),
-              raw: raw
-            };
+            const sid = (raw.studentId || raw.username || raw.id || raw.uid || '').toString().trim();
+            const nm  = (raw.name || raw.studentName || raw.displayName || '').toString().trim();
+            return { sid, nm: nm || idToName[sid] || '', raw };
           }
+
           // 문자열형
-          const s = (raw||'').toString().trim();
-          // 패턴: "이태리(10101)" 또는 "10101(이태리)"
-          let m = s.match(/^(.+?)\((\d{3,})\)$/); // "이름(학번)" 형태
-          if (m) return { sid: m[2].trim(), nm: m[1].trim(), raw: s };
-          m = s.match(/^(\d{3,})\((.+?)\)$/);      // "학번(이름)" 형태
-          if (m) return { sid: m[1].trim(), nm: m[2].trim(), raw: s };
-          // 그냥 학번 또는 그냥 이름일 수 있음
-          return {
-            sid: s,
-            nm : idToName[s] || s,
-            raw: s
-          };
+          const s = (raw || '').toString().trim();
+          let sid = '', nm = '';
+          // "이름(학번)" 형태
+          let m = s.match(/^(.+?)\(([^)]+)\)$/);
+          if (m) { nm = m[1].trim(); sid = m[2].trim(); }
+          else {
+            // "학번(이름)" 형태 (학번은 영숫자/언더스코어/하이픈 허용)
+            m = s.match(/^([0-9A-Za-z_-]+)\((.+?)\)$/);
+            if (m) { sid = m[1].trim(); nm = m[2].trim(); }
+            else {
+              // 그냥 학번 또는 그냥 이름
+              sid = s;
+              nm  = idToName[s] || '';
+            }
+          }
+          return { sid, nm, raw: s };
         }
      
         evals.forEach(ev=>{
@@ -1236,6 +1243,7 @@
   </script>
 </body>
 </html>
+
 
 
 
