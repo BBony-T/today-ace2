@@ -2,16 +2,22 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Firebase 설정 (환경변수 사용)
-let db;
-try {
+/** Firebase Admin 공통 초기화 */
+function getDB() {
   if (!getApps().length) {
-    const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    if (!raw) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is missing');
+    }
+    let svc;
+    try {
+      svc = JSON.parse(raw);
+    } catch {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON parse error');
+    }
     initializeApp({ credential: cert(svc) });
   }
-  db = getFirestore();
-} catch (error) {
-  console.error('Firebase(Admin) 초기화 오류:', error);
+  return getFirestore();
 }
 
 export default async function handler(req, res) {
@@ -53,20 +59,7 @@ export default async function handler(req, res) {
     }
 
     // ── Firestore 조회 ─────────────────────────────────────────
-    if (!db) {
-      // Firebase가 초기화되지 않은 경우 (테스트용 더미 데이터)
-      const dummyData = generateDummyData(targetUsername || 'student1');
-      const filtered  = isAdminMode
-        ? filterEvaluationsForAdmin(dummyData, { startDate, endDate, evaluationType, targetUsername })
-        : filterEvaluationsForStudent(dummyData, { targetUsername, startDate, endDate, evaluationType });
-
-      return res.status(200).json({
-        success: true,
-        evaluations: filtered,
-        count: filtered.length,
-        message: '테스트 모드 - 더미 데이터'
-      });
-    }
+    const db = getDB();
 
     let q = db.collection('evaluations');
 
@@ -102,11 +95,11 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('평가 조회 API 오류:', error);
-    // 클라이언트에서 에러 핸들링을 단순화하려면 200으로 감싸도 됩니다.
+    console.error('get-evaluations error:', error?.message || error);
+    // 프로덕션에서는 더미 절대 금지: 명확히 에러로 응답
     return res.status(500).json({
       success: false,
-      error: '서버 오류가 발생했습니다.'
+      error: 'DB 초기화/조회 실패'
     });
   }
 }
@@ -179,33 +172,4 @@ function filterEvaluationsForStudent(evaluations, { targetUsername, startDate, e
 
     return peerHit || selfHit;
   });
-}
-
-/** 테스트용 더미 데이터 */
-function generateDummyData(username) {
-  const competencies = ['자신감과 리더십', '분석', '아이디어 뱅크', '감정 이해', '의사소통', '협동심'];
-  const dummyData = [];
-
-  for (let i = 0; i < 10; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() - i * 3);
-    const iso = date.toISOString();
-
-    dummyData.push({
-      id: `dummy-${i}`,
-      evaluatorUsername: `student${i + 1}`,
-      date: iso.slice(0, 10),
-      timestamp: iso,
-      peerEvaluations: competencies.map(comp => ({
-        competency: comp,
-        nominees: Math.random() > 0.7 ? [username] : [],
-        reasons: Math.random() > 0.7 ? [`${comp}에서 정말 뛰어났어요!`] : []
-      })),
-      selfEvaluation: {
-        competency: competencies[Math.floor(Math.random() * competencies.length)],
-        reason: '오늘 이 부분에서 성장했다고 느꼈습니다.'
-      }
-    });
-  }
-  return dummyData;
 }
