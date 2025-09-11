@@ -1,14 +1,12 @@
-// 변경 후
+// /api/admin/import-students.js
 import { getDB } from '../../lib/admin.js';
 import { FieldValue } from 'firebase-admin/firestore'; // serverTimestamp용
 
 function normId(v = '') {
-  // 학번: 문자열화 + 앞뒤 공백 제거 (선행 0 보존)
-  return String(v ?? '').trim();
+  return String(v ?? '').trim(); // 학번: 앞뒤 공백만 제거(선행 0 보존)
 }
 function normName(v = '') {
-  // 이름: 앞뒤 공백 제거 + 유니코드 정규화(NFC)
-  return String(v ?? '').trim().normalize('NFC');
+  return String(v ?? '').trim().normalize('NFC'); // 이름: 공백 제거 + 유니코드 정규화
 }
 
 export default async function handler(req, res) {
@@ -20,24 +18,17 @@ export default async function handler(req, res) {
   let teacherId = String(req.query.teacherId || '').trim();
   let body = {};
   try {
-    body = typeof req.body === 'string'
-      ? JSON.parse(req.body || '{}')
-      : (req.body || {});
+    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   } catch {
     return res.status(400).json({ success: false, error: 'Invalid JSON body' });
   }
   if (!teacherId) teacherId = String(body.teacherId || '').trim();
 
   const {
-    // 'subject' | 'club'
-    categoryType = 'subject',
+    categoryType = 'subject',   // 'subject' | 'club'
     categoryName = '',
-    // 기존 명부에 추가하고 싶을 때 사용 (옵션)
-    rosterId: rosterIdInBody = '',
-    // [{ name, studentId, username?, password? }, ...]
     roster = [],
-    // 기존 학생 문서가 있어도 덮어쓰지 말고 merge
-    skipExisting = true,
+    skipExisting = true
   } = body;
 
   if (!teacherId) {
@@ -46,39 +37,29 @@ export default async function handler(req, res) {
   if (!Array.isArray(roster) || roster.length === 0) {
     return res.status(400).json({ success: false, error: 'roster empty' });
   }
-  const type = (categoryType === 'club') ? 'club' : 'subject'; // 가드
-  const title = String(categoryName || '').trim() || '무제 명부';
 
-  const nowServer = admin.firestore.FieldValue.serverTimestamp();
+  const db  = getDB();
+  const now = FieldValue.serverTimestamp();
 
   try {
-    const dbo = db();
+    // 1) 명부 문서 생성
+    const rosterRef = db.collection('rosters').doc();
+    const rosterId  = rosterRef.id;
 
-    // 1) 명부 메타 upsert: rosterId가 오면 재사용, 없으면 새로 생성
-    const rosterRef = rosterIdInBody
-      ? dbo.collection('rosters').doc(String(rosterIdInBody))
-      : dbo.collection('rosters').doc();
-
-    const rosterId = rosterRef.id;
-
-    // 메타는 언제나 merge(upsert)
-    await rosterRef.set(
-      {
-        id: rosterId,
-        teacherId,
-        categoryType: type,
-        categoryName: title,
-        title,               // 화면 표시명
-        active: false,       // 현황판 노출은 UI에서 토글
-        updatedAt: nowServer,
-        // 최초 생성일 보존
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    await rosterRef.set({
+      id: rosterId,
+      teacherId,
+      categoryType,
+      categoryName,
+      title: categoryName || '무제 명부',
+      itemCount: roster.length,
+      active: false,    // 현황판 노출 여부는 별도 토글에서 제어
+      createdAt: now,
+      updatedAt: now,
+    });
 
     // 2) 학생 upsert
-    const batch = dbo.batch();
+    const batch = db.batch();
     let upserts = 0;
 
     for (const r of roster) {
@@ -88,54 +69,38 @@ export default async function handler(req, res) {
       if (!rawId || rawId.includes('/')) continue; // 문서ID 불가 문자 방지
       if (!rawName) continue;
 
-      const docRef = dbo.collection('students').doc(rawId);
+      // 문서ID = 학번(=username)
+      const docRef = db.collection('students').doc(rawId);
 
       const data = {
         studentId: rawId,
         username: rawId,
-        usernameNorm: rawId,      // 검색 안정성
+        usernameNorm: rawId,
         name: rawName,
         password: rawName,        // 기본 비번 = 이름
         passwordNorm: rawName,
         teacherId,
         rosterId,
-        enabled: true,
-        subject: type === 'subject' ? title : '',
-        club:    type === 'club'    ? title : '',
-        updatedAt: nowServer,
+        enabled: true,            // 항상 로그인 가능
+        subject: categoryType === 'subject' ? categoryName : '',
+        club:    categoryType === 'club'    ? categoryName : '',
+        updatedAt: now,
       };
 
       if (skipExisting) {
-        batch.set(docRef, data, { merge: true });
+        batch.set(docRef, data, { merge: true });  // 기존 보존
       } else {
-        batch.set(docRef, { ...data, createdAt: nowServer });
+        batch.set(docRef, { ...data, createdAt: now });
       }
       upserts++;
     }
 
     await batch.commit();
 
-    // 3) 실제 학생 수 재계산 → rosters.itemCount 갱신
-    const snap = await dbo
-      .collection('students')
-      .where('teacherId', '==', teacherId)
-      .where('rosterId', '==', rosterId)
-      .get();
-
-    const itemCount = snap.size;
-
-    await rosterRef.set(
-      {
-        itemCount,
-        updatedAt: nowServer,
-      },
-      { merge: true },
-    );
-
     return res.status(200).json({
       success: true,
       rosterId,
-      itemCount,
+      count: roster.length,
       upserts,
     });
   } catch (e) {
