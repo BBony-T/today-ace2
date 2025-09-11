@@ -1,5 +1,5 @@
 // /api/admin/import-students.js
-import { db } from '../_fb.js';
+import { getDB } from '../../lib/admin.js';
 import admin from 'firebase-admin';
 
 function normId(v = '') {
