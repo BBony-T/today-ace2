@@ -1,6 +1,6 @@
 // /api/auth/teacher-signup.js
-import { db } from '../_fb.js';
-import admin from 'firebase-admin';
+import { getDB } from '../../lib/admin.js';
+import { FieldValue } from 'firebase-admin/firestore';
 
 export default async function handler(req, res) {
   try {
@@ -8,15 +8,20 @@ export default async function handler(req, res) {
       return res.status(405).json({ success:false, error:'Method Not Allowed' });
     }
 
-    const { name = '', email = '', password = '' } =
-      typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const name = String(body.name || '').trim();
+    const email = String(body.email || '').trim();
+    const password = String(body.password || '').trim();
 
     if (!name || !email || !password) {
       return res.status(400).json({ success:false, error:'필수값(name, email, password)' });
     }
 
+    const db = getDB();
+
     // 1) 중복 이메일 방지 (users 컬렉션)
-    const dup = await db().collection('users')
+    const dup = await db
+      .collection('users')
       .where('email', '==', email)
       .limit(1)
       .get();
@@ -26,18 +31,18 @@ export default async function handler(req, res) {
     }
 
     // 2) teacherId 발급 (teachers 문서 id)
-    const teacherRef = db().collection('teachers').doc();
+    const teacherRef = db.collection('teachers').doc();
     const teacherId = teacherRef.id;
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
 
     // 3) 자동 승인(요청사항 반영)
     const status = 'active';
     const approvedBy = 'system:auto';
 
     // 4) users / teachers 동시 생성 (users 문서 id = teacherId)
-    const batch = db().batch();
-    const userRef = db().collection('users').doc(teacherId);
+    const batch = db.batch();
+    const userRef = db.collection('users').doc(teacherId);
 
     batch.set(userRef, {
       role: 'teacher',
@@ -67,15 +72,15 @@ export default async function handler(req, res) {
 
     await batch.commit();
 
-    // 5) 감사 로그(선택) — 수퍼가 가입 내역을 추적할 수 있도록
-    await db().collection('audit_logs').add({
+    // 5) 감사 로그(선택)
+    await db.collection('audit_logs').add({
       type: 'signup-teacher',
       userId: teacherId,
       email,
       name,
-      status,                     // 'active'
+      status,   // 'active'
       by: approvedBy,
-      at: admin.firestore.FieldValue.serverTimestamp(),
+      at: FieldValue.serverTimestamp(),
     });
 
     return res.status(200).json({ success:true, teacherId, status });
