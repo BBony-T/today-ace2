@@ -1,11 +1,10 @@
 // /api/save-evaluation.js
-import { db } from './_fb.js';
-import admin from 'firebase-admin';
+import { getDB } from '../lib/admin.js';
+import { FieldValue } from 'firebase-admin/firestore';
 import { getUserFromReq } from './_shared/initAdmin.js';
 
-const nowTS = () => admin.firestore.FieldValue.serverTimestamp();
-const toStr = (v) => (v ?? '').toString().trim();
-const normName = (v='') => toStr(v).normalize('NFC');
+const toStr = v => (v ?? '').toString().trim();
+const normName = v => toStr(v).normalize('NFC'); // 이름 비교용
 
 export default async function handler(req, res) {
   try {
@@ -13,147 +12,106 @@ export default async function handler(req, res) {
       return res.status(405).json({ success: false, error: 'Method Not Allowed' });
     }
 
-    // 세션에서 "학생" 확인
+    // 1) 세션: 학생만 허용
     const me = getUserFromReq?.(req) || null;
     if (!me || me.role !== 'student') {
       return res.status(401).json({ success: false, error: 'STUDENT_SESSION_REQUIRED' });
     }
 
-    // 기본 컨텍스트
+    // 2) 컨텍스트 보강
+    const db = getDB();
     let teacherId = toStr(me.teacherId || '');
-    let rosterId  = toStr(me.rosterId || '');
-    let myUid     = toStr(me.uid || '');
-    let myName    = toStr(me.name || '');
-    let myUsername= toStr(me.username || '');
+    let rosterId  = toStr(me.rosterId  || '');
+    let myUid     = toStr(me.uid       || '');
+    let myName    = toStr(me.name      || '');
+    let myUser    = toStr(me.username  || '');
 
-    // 누락 보강
-    if (!teacherId || !rosterId || !myName || !myUsername) {
-      const sDoc = await db().collection('students').doc(myUid || myUsername).get();
+    if (!teacherId || !rosterId || !myName || !myUser) {
+      const sDoc = await db.collection('students').doc(myUid || myUser).get();
       if (sDoc.exists) {
-        const s = sDoc.data();
-        teacherId  = teacherId  || toStr(s.teacherId);
-        rosterId   = rosterId   || toStr(s.rosterId);
-        myName     = myName     || toStr(s.name);
-        myUsername = myUsername || toStr(s.username || s.studentId || sDoc.id);
+        const s = sDoc.data() || {};
+        teacherId = teacherId || toStr(s.teacherId);
+        rosterId  = rosterId  || toStr(s.rosterId);
+        myName    = myName    || toStr(s.name);
+        myUser    = myUser    || toStr(s.username || s.studentId || sDoc.id);
       }
     }
-
     if (!rosterId) {
       return res.status(422).json({ success:false, error:'ROSTER_CONTEXT_REQUIRED' });
     }
 
-    // 클라이언트 payload
+    // 3) 요청 본문
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const date = toStr(body.date) || new Date().toISOString().slice(0,10);
-    const peerEvaluations = Array.isArray(body.peerEvaluations) ? body.peerEvaluations : [];
-    const selfEvaluation  = body.selfEvaluation || null;
+    const peerEvaluationsIn = Array.isArray(body.peerEvaluations) ? body.peerEvaluations : [];
+    const selfEvaluationIn  = body.selfEvaluation || null;
 
-    // === 같은 "명부(rosterId)" 안의 학생만 불러와 이름 매핑 인덱스 생성 ===
-    const qs = await db()
-      .collection('students')
-      .where('rosterId','==', rosterId)
-      .get();
-
-    const byName = new Map();          // normName -> [{id, studentId, username, name}]
-    const duplicates = new Map();      // normName -> [studentIds] (동명이인 감지용)
-
-    qs.forEach(d => {
-      const s = d.data();
-      const key = normName(s.name || '');
-      if (!key) return;
-      const entry = { id:d.id, studentId: toStr(s.studentId || d.id), username: toStr(s.username || d.id), name: toStr(s.name || '') };
-      if (!byName.has(key)) byName.set(key, [entry]);
-      else {
-        byName.get(key).push(entry);
-        duplicates.set(key, byName.get(key).map(x=>x.studentId));
-      }
+    // 4) 같은 명부의 학생 이름 → username 매핑(모호성 방지 최소화)
+    const snap = await db.collection('students').where('rosterId','==', rosterId).get();
+    const nameToUser = new Map(); // 정규화된 이름 -> username
+    snap.forEach(d => {
+      const s = d.data() || {};
+      const nm = normName(s.name || '');
+      const un = toStr(s.username || s.studentId || d.id);
+      if (nm && un) nameToUser.set(nm, un);
     });
 
-    // 정책 1: 같은 명부에서 동명이인 금지(있으면 거절)
-    if (duplicates.size > 0) {
-      // 입력 값에 실제로 중복 이름이 포함된 경우에만 에러로 리턴
-      const usedKeys = new Set(peerEvaluations.map(p => normName(p?.name)));
-      const hit = [...duplicates.entries()].filter(([k]) => usedKeys.has(k));
-      if (hit.length > 0) {
-        return res.status(422).json({
-          success:false,
-          error:'AMBIGUOUS_NAME_IN_ROSTER',
-          details: hit.map(([k, ids]) => ({ name: k, candidates: ids }))
-        });
-      }
-    }
-
-    // 정책 2: 자기 자신은 추천 불가
     const myKey = normName(myName);
 
-    // 이름 해석(같은 명부 안에서만)
-    const resolvedPeers = [];
-    const unknown = [];
+    // 5) 기존 포맷으로 정규화: nominees = [ "username" ], reasons = [ "텍스트" ]
+    const peerOut = [];
+    for (const it of peerEvaluationsIn) {
+      const comp = toStr(it.competency);
+      const inputName = toStr(it.name || it.target || it.nominee || ''); // 다양한 키 허용
+      const why       = toStr(it.reason || '');
 
-    for (const item of peerEvaluations) {
-      const comp  = toStr(item.competency);
-      const input = toStr(item.name);
-      const why   = toStr(item.reason);
+      if (!comp || !inputName) continue;
 
-      if (!input) continue;
-
-      const key = normName(input);
-
+      const key = normName(inputName);
       if (key === myKey) {
-        return res.status(422).json({ success:false, error:'CANNOT_EVALUATE_SELF', name: input });
+        return res.status(422).json({ success:false, error:'CANNOT_EVALUATE_SELF', name: inputName });
       }
 
-      const list = byName.get(key) || [];
-      if (list.length === 1) {
-        const t = list[0];
-        resolvedPeers.push({
-          competency: comp,
-          targetName: t.name,
-          targetUsername: t.username,
-          targetStudentId: t.studentId,
-          targetDocId: t.id,
-          reason: why
-        });
-      } else {
-        // 같은 명부 안에서 못 찾음(또는 중복 에러는 위에서 이미 걸러짐)
-        unknown.push(input);
+      const user = nameToUser.get(key);
+      if (!user) {
+        // 명부에 이름이 없으면 클라이언트에서 바로잡게 에러 리턴(과도한 스키마 변경 없이 최소 정책만)
+        return res.status(422).json({ success:false, error:'NAME_NOT_FOUND_IN_ROSTER', unknown:[inputName] });
       }
-    }
 
-    if (unknown.length > 0) {
-      return res.status(422).json({
-        success:false,
-        error:'NAME_NOT_FOUND_IN_ROSTER',
-        unknown   // 저장하지 않고 입력 보정 유도
+      // ✅ “기존(레거시) 관리자/학생 화면이 기대하던 형태”
+      // - nominees: 문자열 username 배열 (index로 reasons 매칭)
+      // - reasons : 같은 길이의 문자열 배열
+      peerOut.push({
+        competency: comp,
+        nominees: [user],
+        reasons:  [why].filter(Boolean)
       });
     }
 
-    // 저장
+    const selfOut = selfEvaluationIn ? {
+      competency: toStr(selfEvaluationIn.competency),
+      reason:     toStr(selfEvaluationIn.reason)
+    } : null;
+
+    // 6) 저장 다큐먼트: 기존 화면 호환 필드 포함(evaluatorUsername, date, timestamp)
     const doc = {
-      type: 'daily-evaluation',
+      teacherId, rosterId,
       date,
-      teacherId,
-      rosterId,
-      evaluator: {
-        uid: myUid || null,
-        username: myUsername || null,
-        name: myName || null,
-      },
-      peerEvaluations: resolvedPeers,
-      selfEvaluation: selfEvaluation ? {
-        competency: toStr(selfEvaluation.competency),
-        reason: toStr(selfEvaluation.reason)
-      } : null,
-      createdAt: nowTS(),
-      updatedAt: nowTS()
+      timestamp: new Date().toISOString(),        // ISO로도 넣고
+      evaluatorUsername: myUser,                  // 기존 화면이 쓰던 키
+      evaluator: { uid: myUid || null, name: myName || null, username: myUser || null },
+      peerEvaluations: peerOut,
+      selfEvaluation: selfOut,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
     };
 
-    const ref = await db().collection('evaluations').add(doc);
+    const ref = await db.collection('evaluations').add(doc);
 
     return res.status(200).json({
       success: true,
       id: ref.id,
-      saved: resolvedPeers.length + (selfEvaluation ? 1 : 0)
+      saved: peerOut.length + (selfOut ? 1 : 0)
     });
   } catch (e) {
     console.error('[save-evaluation] error', e);
