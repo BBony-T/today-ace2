@@ -5,15 +5,17 @@ import { getFirestore } from 'firebase-admin/firestore';
 /** Firebase Admin 공통 초기화 */
 function getDB() {
   if (!getApps().length) {
-    const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    // ✅ 둘 다 지원
+    const raw = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     if (!raw) {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is missing');
+      throw new Error('FIREBASE_SERVICE_ACCOUNT is missing');
     }
     let svc;
     try {
-      svc = JSON.parse(raw);
+      svc = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (svc.private_key) svc.private_key = svc.private_key.replace(/\\n/g, '\n');
     } catch {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON parse error');
+      throw new Error('FIREBASE_SERVICE_ACCOUNT parse error');
     }
     initializeApp({ credential: cert(svc) });
   }
@@ -252,3 +254,4 @@ function filterEvaluationsForStudent(evaluations, { targetUsername, startDate, e
     return peerHit || selfHit;
   });
 }
+
