@@ -181,18 +181,18 @@ function normalizeEvaluations(list) {
   return (list || []).map(e => {
     const out = { ...e };
 
+    // ✅ evaluatorUsername 보강
+    if (!out.evaluatorUsername && out.evaluator && out.evaluator.username) {
+      out.evaluatorUsername = String(out.evaluator.username || '').trim();
+    }
+
     const rawPeers =
       Array.isArray(e.peerEvaluations) ? e.peerEvaluations :
-      Array.isArray(e.peers) ? e.peers : // 혹시 다른 키로 저장된 경우 대비
-      [];
+      Array.isArray(e.peers) ? e.peers : [];
 
-    const normPeers = rawPeers
-      .map(normalizePeer)
-      .filter(Boolean);
-
+    const normPeers = rawPeers.map(normalizePeer).filter(Boolean);
     out.peerEvaluations = normPeers;
 
-    // selfEvaluation은 현재 통계 로직에 영향 없음(필요 시 확장)
     return out;
   });
 }
@@ -207,7 +207,9 @@ function filterEvaluationsForAdmin(evaluations, { startDate, endDate, evaluation
       const hitsPeer = Array.isArray(e.peerEvaluations) && e.peerEvaluations.some(pe =>
         Array.isArray(pe.nominees) && pe.nominees.includes(targetUsername)
       );
-      const hitSelf  = e.evaluatorUsername === targetUsername && !!e.selfEvaluation;
+      const hitSelf =
+        (e.evaluatorUsername === targetUsername) ||
+        (e.evaluator && e.evaluator.username === targetUsername);
 
       if (evaluationType === 'peer') return hitsPeer;
       if (evaluationType === 'self') return hitSelf;
@@ -248,10 +250,13 @@ function filterEvaluationsForStudent(evaluations, { targetUsername, startDate, e
       evaluation.peerEvaluations.some(peer =>
         Array.isArray(peer.nominees) && peer.nominees.includes(targetUsername)
       );
-    const selfHit = evaluation.evaluatorUsername === targetUsername &&
+    const selfHit =
+      (evaluation.evaluatorUsername === targetUsername ||
+       (evaluation.evaluator && evaluation.evaluator.username === targetUsername)) &&
       !!evaluation.selfEvaluation;
 
     return peerHit || selfHit;
   });
 }
+
 
