@@ -257,5 +257,17 @@
     });
   </script>
 </body>
+  <script>
+  window.tryReq = window.tryReq || (async function (reqPromise) {
+    const r = await reqPromise;
+    let j = null, t = '';
+    try { j = await r.clone().json(); } catch { try { t = await r.text(); } catch {} }
+    if (!r.ok || (j && j.success === false)) {
+      throw new Error((j && j.error) || t || `HTTP ${r.status}`);
+    }
+    return j ?? {};
+  });
+  </script>
 </html>
+
 
