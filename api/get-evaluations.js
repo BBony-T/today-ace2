@@ -25,55 +25,37 @@ export default async function handler(req, res) {
     const evaluationType = (p.evaluationType || 'all').toString(); // 'peer' | 'self' | 'all'
 
     const isAdminMode = !!teacherId || allFlag;
-
+    
+    // 학생 모드 파라미터가 없으면 "빈 결과"로 응답 (대시보드 초기 로드용)
     if (!isAdminMode && !targetUsername) {
-      return res.status(400).json({ success:false, error:'조회할 사용자명이 필요합니다.' });
+      return res.status(200).json({ success: true, evaluations: [], count: 0 });
     }
 
     // ── Firestore 조회 ─────────────────────────────────────────
     const db = getDB();
-    let base = db.collection('evaluations');
 
-    if (teacherId) base = base.where('teacherId', '==', teacherId);
-    if (rosterId)  base = base.where('rosterId', '==', rosterId);
+    let q = db.collection('evaluations');
+    if (teacherId) q = q.where('teacherId', '==', teacherId);
+    if (rosterId)  q = q.where('rosterId', '==', rosterId);
 
-    // ① createdAt 정렬 → ② timestamp 정렬 → ③ 정렬 없이
-    async function tryFetch() {
-      // 1) createdAt desc
-      try {
-        const snap = await base.orderBy('createdAt', 'desc').get();
-        return { snap, used: 'createdAt' };
-      } catch (e1) {
-        // 2) timestamp desc
-        try {
-          const snap = await base.orderBy('timestamp', 'desc').get();
-          return { snap, used: 'timestamp' };
-        } catch (e2) {
-          // 3) 정렬 없이
-          const snap = await base.get();
-          return { snap, used: 'none' };
-        }
-      }
-    }
-
-    const { snap } = await tryFetch();
+    // 집계 용도이므로 정렬은 빼고 전부 가져온 뒤 메모리에서 정렬
+    const snap = await q.get();
 
     const list = [];
     snap.forEach(doc => {
       const data = doc.data() || {};
-      const tsIso = toISO(data.createdAt) || toISO(data.timestamp);
+      // createdAt 우선, 없으면 timestamp, 둘 다 없으면 ''
+      const tsIso = toISO(data.createdAt) || toISO(data.timestamp) || '';
       list.push({
         id: doc.id,
         ...data,
         timestamp: tsIso,
-        date: data.date || (tsIso ? tsIso.slice(0, 10) : '')
+        date: data.date || (tsIso ? tsIso.slice(0, 10) : ''),
       });
     });
-    
-    // orderBy를 못 쓴 경우(둘 다 없는 문서 섞여 있을 때) 메모리 정렬
-    if (!useCreated && !snap.query._fieldOrders?.length) {
-      list.sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||''));
-    }
+
+    // 필요하면 보기 좋게 최신순으로만 정렬 (집계에는 영향 없음)
+    list.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
 
     // 스키마 노말라이즈(프론트 기대형식: nominees 배열 등)
     const normalized = normalizeEvaluations(list);
@@ -186,4 +168,5 @@ function filterEvaluationsForStudent(evaluations, { targetUsername, startDate, e
     return peerHit || selfHit;
   });
 }
+
 
