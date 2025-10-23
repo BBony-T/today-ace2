@@ -1,7 +1,8 @@
 // /api/ai-advice.js
+export const config = { runtime: 'nodejs' };
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash-002';
 const API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
 
 function toStr(v) { return (v ?? '').toString(); }
