@@ -1,17 +1,8 @@
 // /api/admin/upsert-activity.js
-import { getApps, initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getDB } from '../../lib/admin.js';
+import { FieldValue } from 'firebase-admin/firestore';
 
-let db;
-try {
-  if (!getApps().length) {
-    const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-    initializeApp({ credential: cert(svc) });
-  }
-  db = getFirestore();
-} catch (e) {
-  console.error('[upsert-activity] Firebase init failed:', e);
-}
+const s = v => (v ?? '').toString().trim();
 
 export default async function handler(req, res) {
   // CORS
@@ -19,31 +10,59 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+  }
 
   try {
-    if (!db) return res.status(200).json({ success: false, error: 'NO_DB' });
+    const db = getDB();
+
+    const teacherId = s(req.query.teacherId);
+    if (!teacherId) return res.status(400).json({ success:false, error:'teacherId required' });
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const teacherId = (body.teacherId || '').toString().trim();
-    const rosterId  = (body.rosterId  || '').toString().trim();
-    const date      = (body.date      || '').toString().slice(0, 10);
-    const name      = (body.name      || body.title || '').toString().trim();
+    const id       = s(body.id);                       // 수정 시 사용(옵션)
+    const rosterId = s(body.rosterId);                 // UI에서 필수
+    const date     = s(body.date).slice(0, 10);        // YYYY-MM-DD
+    const name     = s(body.name || body.title);       // 둘 다 허용
 
-    if (!teacherId || !rosterId || !date || !name) {
-      return res.status(400).json({ success: false, error: 'teacherId, rosterId, date, name are required' });
+    if (!rosterId) return res.status(400).json({ success:false, error:'rosterId required' });
+    if (!date || !name) return res.status(400).json({ success:false, error:'date & name required' });
+
+    // 수정(아이디가 있으면 update)
+    if (id) {
+      await db.collection('activities').doc(id).set({
+        teacherId, rosterId, date, name, title: name,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      return res.status(200).json({ success:true, id, mode:'update' });
     }
 
-    // 같은 (teacherId, rosterId, date) 한 건만 유지하도록 doc id 고정
-    const docId = `${teacherId}__${rosterId}__${date}`;
-    await db.collection('activities').doc(docId).set({
-      teacherId, rosterId, date, name, updatedAt: FieldValue.serverTimestamp(),
-      createdAt: FieldValue.serverTimestamp()
-    }, { merge: true });
+    // 신규: 같은 키(teacherId, rosterId, date, name) 중복 방지 시도
+    const dup = await db.collection('activities')
+      .where('teacherId', '==', teacherId)
+      .where('rosterId', '==', rosterId)
+      .where('date', '==', date)
+      .where('name', '==', name)
+      .limit(1)
+      .get();
 
-    return res.status(200).json({ success: true, id: docId });
+    if (!dup.empty) {
+      const doc = dup.docs[0];
+      await doc.ref.set({ updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      return res.status(200).json({ success:true, id: doc.id, mode:'exists' });
+    }
+
+    const ref = await db.collection('activities').add({
+      teacherId, rosterId, date, name, title: name,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return res.status(200).json({ success:true, id: ref.id, mode:'insert' });
   } catch (e) {
     console.error('[upsert-activity] error:', e);
-    return res.status(200).json({ success: false, error: 'UPSERT_ACTIVITY_FAIL' });
+    return res.status(500).json({ success:false, error:'UPSERT_ACTIVITY_FAIL' });
   }
 }
