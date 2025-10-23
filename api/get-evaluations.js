@@ -32,23 +32,33 @@ export default async function handler(req, res) {
 
     // ── Firestore 조회 ─────────────────────────────────────────
     const db = getDB();
-    let q = db.collection('evaluations');
+    let base = db.collection('evaluations');
 
-    if (teacherId) q = q.where('teacherId', '==', teacherId);
-    if (rosterId)  q = q.where('rosterId', '==', rosterId);
+    if (teacherId) base = base.where('teacherId', '==', teacherId);
+    if (rosterId)  base = base.where('rosterId', '==', rosterId);
 
-    // createdAt 있으면 우선 사용, 없으면 timestamp로 폴백
-    // (양쪽 모두 없는 문서도 대응되도록 orderBy 없이 가져온 뒤 메모리 정렬)
-    let useCreated = true;
-    try {
-      q = q.orderBy('createdAt', 'desc');
-    } catch {
-      useCreated = false;
-      try { q = q.orderBy('timestamp', 'desc'); } catch { /* no-op */ }
+    // ① createdAt 정렬 → ② timestamp 정렬 → ③ 정렬 없이
+    async function tryFetch() {
+      // 1) createdAt desc
+      try {
+        const snap = await base.orderBy('createdAt', 'desc').get();
+        return { snap, used: 'createdAt' };
+      } catch (e1) {
+        // 2) timestamp desc
+        try {
+          const snap = await base.orderBy('timestamp', 'desc').get();
+          return { snap, used: 'timestamp' };
+        } catch (e2) {
+          // 3) 정렬 없이
+          const snap = await base.get();
+          return { snap, used: 'none' };
+        }
+      }
     }
 
-    const snap = await q.get();
-    let list = [];
+    const { snap } = await tryFetch();
+
+    const list = [];
     snap.forEach(doc => {
       const data = doc.data() || {};
       const tsIso = toISO(data.createdAt) || toISO(data.timestamp);
@@ -59,7 +69,7 @@ export default async function handler(req, res) {
         date: data.date || (tsIso ? tsIso.slice(0, 10) : '')
       });
     });
-
+    
     // orderBy를 못 쓴 경우(둘 다 없는 문서 섞여 있을 때) 메모리 정렬
     if (!useCreated && !snap.query._fieldOrders?.length) {
       list.sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||''));
@@ -176,3 +186,4 @@ function filterEvaluationsForStudent(evaluations, { targetUsername, startDate, e
     return peerHit || selfHit;
   });
 }
+
