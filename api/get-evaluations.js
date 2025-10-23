@@ -92,35 +92,58 @@ function inDateRange(recDate, startDate, endDate) {
 
 function asStr(v) { return (v ?? '').toString().trim(); }
 
+/** peerEvaluation 1건을 통일 스키마로 변환 */
 function normalizePeer(pe) {
   if (!pe || typeof pe !== 'object') return null;
+
   const competency = asStr(pe.competency);
+  if (!competency) return null;
 
-  const nomineeCand = [
-    asStr(pe.targetStudentId),
-    asStr(pe.targetUsername),
-    asStr(pe.targetName)
-  ];
+  // 가능한 모든 식별자를 nominees 에 모아두기 (dup 제거)
+  const ids = new Set();
 
-  if (!nomineeCand.some(Boolean)) {
-    const tgt = pe.target || pe.nominee || null;
-    if (tgt && typeof tgt === 'object') {
-      nomineeCand.push(asStr(tgt.studentId), asStr(tgt.username), asStr(tgt.name));
-    }
+  // 1) 새 스키마 필드
+  const sId  = asStr(pe.targetStudentId);
+  const uId  = asStr(pe.targetUsername);
+  const name = asStr(pe.targetName);
+  if (sId)  ids.add(sId);
+  if (uId)  ids.add(uId);
+  if (name) ids.add(name);
+
+  // 2) 객체로 들어온 경우도 흡수
+  const tgt = pe.target || pe.nominee || null;
+  if (tgt && typeof tgt === 'object') {
+    const tSid  = asStr(tgt.studentId);
+    const tUid  = asStr(tgt.username);
+    const tName = asStr(tgt.name);
+    if (tSid)  ids.add(tSid);
+    if (tUid)  ids.add(tUid);
+    if (tName) ids.add(tName);
   }
-  let nominees = [];
-  const first = nomineeCand.find(Boolean);
-  if (Array.isArray(pe.nominees)) nominees = pe.nominees.map(asStr).filter(Boolean);
-  else if (asStr(pe.nominees)) nominees = [asStr(pe.nominees)];
-  if (!nominees.length && first) nominees = [first];
 
-  let reasons = [];
-  if (Array.isArray(pe.reasons)) reasons = pe.reasons.map(asStr).filter(Boolean);
-  else if (asStr(pe.reason)) reasons = [asStr(pe.reason)];
+  // 3) 레거시 nominees (문자열/배열)도 전부 흡수
+  if (Array.isArray(pe.nominees)) {
+    pe.nominees.map(asStr).filter(Boolean).forEach(v => ids.add(v));
+  } else {
+    const one = asStr(pe.nominees);
+    if (one) ids.add(one);
+  }
 
-  if (!competency || !nominees.length) return null;
+  // 4) 이유(단일/배열 통합)
+  const reasons = [];
+  if (Array.isArray(pe.reasons)) {
+    pe.reasons.map(asStr).filter(Boolean).forEach(v => reasons.push(v));
+  } else {
+    const r = asStr(pe.reason);
+    if (r) reasons.push(r);
+  }
+
+  const nominees = [...ids];
+  if (!nominees.length) return null;
+
   return { competency, nominees, reasons };
 }
+
 
 function normalizeEvaluations(list) {
   return (list || []).map(e => {
@@ -168,5 +191,6 @@ function filterEvaluationsForStudent(evaluations, { targetUsername, startDate, e
     return peerHit || selfHit;
   });
 }
+
 
 
